@@ -1,5 +1,6 @@
 import type { ObjectDetail, RelatieView } from "../types";
 import { TYPE_LABELS } from "../types";
+import { naarBPPD, naarZinnen } from "./weergave";
 
 interface Props {
   object: ObjectDetail | null;
@@ -10,6 +11,60 @@ interface Props {
 function fmt(value: string | null | undefined): string {
   if (!value) return "—";
   return value.replace(/_/g, " ");
+}
+
+/**
+ * Korte, begrijpelijke toelichting per relatie: niet de kale data, maar
+ * wat de gebruiker hier ziet en waarom dat relevant is — afgeleid van het
+ * relatietype en de bijbehorende velden, dus altijd gegrond in de data
+ * zelf (geen vrije invulling).
+ */
+function relatieUitleg(
+  relatie: RelatieView,
+  richting: "vanuit" | "naartoe",
+  targetNaam: string | undefined
+): string {
+  const naam = targetNaam ? naarBPPD(targetNaam) : "dit onderwerp";
+  const isRedFlagTrigger = relatie.actietype === "acuut_verwijzen";
+
+  switch (relatie.relatieType) {
+    case "bevinding_interpretatie": {
+      if (isRedFlagTrigger) {
+        return `Dit is een rode vlag: deze bevinding wijst op ${naam} en vraagt om ${fmt(
+          relatie.actietype
+        )} — niet verder redeneren, maar doorverwijzen.`;
+      }
+      const waarde = relatie.diagnostischeWaarde
+        ? ` (diagnostische waarde: ${fmt(relatie.diagnostischeWaarde)})`
+        : "";
+      return richting === "vanuit"
+        ? `Dit laat zien hoe een bevinding hier moet worden geïnterpreteerd: ze wijst op ${naam}${waarde}.`
+        : `Dit laat zien welke bevinding bij ${naam} tot deze interpretatie leidt${waarde}.`;
+    }
+    case "voorwaarde":
+      return richting === "vanuit"
+        ? `Dit geldt als voorwaarde voor ${naam} — bijvoorbeeld een contra-indicatie die eerst uitgesloten moet worden voordat dit wordt toegepast.`
+        : `${naam} is hier een voorwaarde — bijvoorbeeld een contra-indicatie die eerst uitgesloten moet worden.`;
+    case "aggregatie":
+      return `Dit is samengevoegd met ${naam} tot één geheel — bijvoorbeeld voor een overzichtelijke, samengestelde patiëntuitleg.`;
+    case "signalering_opvolging": {
+      const actie = relatie.actietype ? ` (${fmt(relatie.actietype)})` : "";
+      return richting === "vanuit"
+        ? `Dit signaal vraagt om een vervolgactie richting ${naam}${actie}.`
+        : `${naam} is het signaal dat hier tot een vervolgactie${actie} leidt.`;
+    }
+    case "differentiaal": {
+      const aard =
+        relatie.relatietypeDifferentiaal === "uitsluitend"
+          ? "sluiten elkaar wederzijds uit"
+          : relatie.relatietypeDifferentiaal === "comorbide"
+            ? "kunnen tegelijk voorkomen (comorbide)"
+            : "moeten tegen elkaar worden afgewogen";
+      return `${naam} is een alternatieve verklaring om te overwegen — deze twee ${aard}.`;
+    }
+    default:
+      return "";
+  }
 }
 
 function RelatieRow({
@@ -32,11 +87,8 @@ function RelatieRow({
         <span className="badge relatie-type-badge">{fmt(relatie.relatieType)}</span>
         {targetId && (
           <button type="button" className="link-button" onClick={() => onNavigate(targetId)}>
-            {richting === "vanuit" ? "→" : "←"} {targetNaam}{" "}
-            <span className="result-id">
-              ({targetId}
-              {targetType ? `, ${TYPE_LABELS[targetType]}` : ""})
-            </span>
+            {richting === "vanuit" ? "→" : "←"} {naarBPPD(targetNaam ?? "")}
+            {targetType && <span className="relatie-target-type"> ({TYPE_LABELS[targetType]})</span>}
           </button>
         )}
         {relatie.actietype && (
@@ -46,11 +98,13 @@ function RelatieRow({
         )}
       </div>
 
+      <p className="relatie-uitleg">{relatieUitleg(relatie, richting, targetNaam)}</p>
+
       {relatie.kwalificatie && Object.keys(relatie.kwalificatie).length > 0 && (
         <div className="kwalificatie">
           {Object.entries(relatie.kwalificatie).map(([k, v]) => (
             <span key={k} className="kwalificatie-chip">
-              {k}: {v}
+              {k}: {naarBPPD(String(v))}
             </span>
           ))}
         </div>
@@ -58,12 +112,12 @@ function RelatieRow({
 
       {relatie.bevinding && (
         <p>
-          <strong>Bevinding:</strong> {relatie.bevinding}
+          <strong>Bevinding:</strong> {naarBPPD(relatie.bevinding)}
         </p>
       )}
       {relatie.interpretatie && (
         <p>
-          <strong>Interpretatie:</strong> {relatie.interpretatie}
+          <strong>Interpretatie:</strong> {naarBPPD(relatie.interpretatie)}
         </p>
       )}
 
@@ -83,6 +137,38 @@ function RelatieRow({
         )}
       </div>
     </li>
+  );
+}
+
+function RelatiesBlok({
+  titel,
+  relaties,
+  richting,
+  onNavigate,
+}: {
+  titel: string;
+  relaties: RelatieView[];
+  richting: "vanuit" | "naartoe";
+  onNavigate: (id: string) => void;
+}) {
+  return (
+    <div className="detail-block">
+      <h3>
+        {titel} ({relaties.length})
+      </h3>
+      {relaties.length === 0 ? (
+        <p className="hint">Geen.</p>
+      ) : (
+        <details className="relatie-details">
+          <summary>Toon relaties</summary>
+          <ul className="relatie-list">
+            {relaties.map((r) => (
+              <RelatieRow key={r.id} relatie={r} richting={richting} onNavigate={onNavigate} />
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
   );
 }
 
@@ -113,16 +199,18 @@ export function ObjectDetailPanel({ object, loading, onNavigate }: Props) {
         <span className="badge evidence-badge">{fmt(object.evidenceNiveau)}</span>
         <span className="badge status-badge">{fmt(object.status)}</span>
       </div>
-      <h2>
-        {object.naam} <span className="result-id">({object.id})</span>
-      </h2>
+      <h2>{naarBPPD(object.naam)}</h2>
 
-      <p className="kernbeschrijving">{object.kernbeschrijving}</p>
+      <p className="kernbeschrijving">{naarBPPD(object.kernbeschrijving)}</p>
 
       {object.klinischeKenmerken && (
         <div className="detail-block">
           <h3>Klinische kenmerken</h3>
-          <p>{object.klinischeKenmerken}</p>
+          <ul className="kenmerken-list">
+            {naarZinnen(naarBPPD(object.klinischeKenmerken)).map((zin, i) => (
+              <li key={i}>{zin}</li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -144,47 +232,38 @@ export function ObjectDetailPanel({ object, loading, onNavigate }: Props) {
         <div className="detail-block">
           <h3>Patiënteducatie</h3>
           <p>
-            <strong>Verwachtingsmanagement:</strong> {object.patientEducatie.verwachtingsmanagement}
+            <strong>Verwachtingsmanagement:</strong>{" "}
+            {naarBPPD(object.patientEducatie.verwachtingsmanagement)}
           </p>
           {object.patientEducatie.rationaleUitlegCounterintuitief && (
             <p>
               <strong>Rationale-uitleg:</strong>{" "}
-              {object.patientEducatie.rationaleUitlegCounterintuitief}
+              {naarBPPD(object.patientEducatie.rationaleUitlegCounterintuitief)}
             </p>
           )}
           <p className="hint">
-            Samengesteld per patiënt: {object.patientEducatie.samengesteld ? "ja" : "nee"} · Bron-
-            objecten: {object.patientEducatie.bronObjectIds.join(", ") || "—"} · Signalering:{" "}
-            {object.patientEducatie.signaleringObjectIds.join(", ") || "—"}
+            Samengesteld per patiënt: {object.patientEducatie.samengesteld ? "ja" : "nee"}
+            {object.patientEducatie.bronObjectIds.length > 0 &&
+              ` · Gebaseerd op ${object.patientEducatie.bronObjectIds.length} bronobject(en)`}
+            {object.patientEducatie.signaleringObjectIds.length > 0 &&
+              ` · Signalering vanuit ${object.patientEducatie.signaleringObjectIds.length} object(en)`}
           </p>
         </div>
       )}
 
-      <div className="detail-block">
-        <h3>Relaties vanuit dit object ({object.relatiesVanuit.length})</h3>
-        {object.relatiesVanuit.length === 0 ? (
-          <p className="hint">Geen.</p>
-        ) : (
-          <ul className="relatie-list">
-            {object.relatiesVanuit.map((r) => (
-              <RelatieRow key={r.id} relatie={r} richting="vanuit" onNavigate={onNavigate} />
-            ))}
-          </ul>
-        )}
-      </div>
+      <RelatiesBlok
+        titel="Relaties vanuit dit onderwerp"
+        relaties={object.relatiesVanuit}
+        richting="vanuit"
+        onNavigate={onNavigate}
+      />
 
-      <div className="detail-block">
-        <h3>Relaties naar dit object toe ({object.relatiesNaartoe.length})</h3>
-        {object.relatiesNaartoe.length === 0 ? (
-          <p className="hint">Geen.</p>
-        ) : (
-          <ul className="relatie-list">
-            {object.relatiesNaartoe.map((r) => (
-              <RelatieRow key={r.id} relatie={r} richting="naartoe" onNavigate={onNavigate} />
-            ))}
-          </ul>
-        )}
-      </div>
+      <RelatiesBlok
+        titel="Relaties naar dit object toe"
+        relaties={object.relatiesNaartoe}
+        richting="naartoe"
+        onNavigate={onNavigate}
+      />
 
       <p className="hint footer-meta">
         Status: {fmt(object.status)} · Laatst gecontroleerd op:{" "}

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { stelVraag } from "./api";
 import type { AIAntwoord } from "./types";
 import type { Rol } from "../types";
+import { naarBPPD } from "../components/weergave";
 
 /**
  * AI-laag — requirements §3. Elk antwoord toont verplicht de gebruikte
@@ -39,7 +40,7 @@ export function VraagPaneel({ rol }: { rol: Rol }) {
       <form onSubmit={onSubmit} className="vraag-form">
         <input
           type="text"
-          placeholder="Bijv. 'Wat is BPPV?' of 'Wat betekent downbeat nystagmus?'"
+          placeholder="Bijv. 'Wat is BPPD?' of 'Wat betekent downbeat nystagmus?'"
           value={vraag}
           onChange={(e) => setVraag(e.target.value)}
         />
@@ -53,11 +54,11 @@ export function VraagPaneel({ rol }: { rol: Rol }) {
       {antwoord && (
         <div className={antwoord.escalatie ? "antwoord-kaart escalatie" : "antwoord-kaart"}>
           {antwoord.geenAntwoord ? (
-            <p className="geen-antwoord">{antwoord.antwoordtekst}</p>
+            <p className="geen-antwoord">{naarBPPD(antwoord.antwoordtekst)}</p>
           ) : (
             <>
               {antwoord.escalatie && <p className="escalatie-label">⚠ Signaal dat om voorzichtigheid vraagt</p>}
-              <p className="antwoord-tekst">{antwoord.antwoordtekst}</p>
+              <p className="antwoord-tekst">{naarBPPD(antwoord.antwoordtekst)}</p>
               <div className="antwoord-meta">
                 <span className="badge">{antwoord.bron}</span>
                 {antwoord.objectIds.map((id) => (

@@ -186,12 +186,6 @@ body {
   margin-bottom: 4px;
 }
 
-.result-id {
-  font-weight: 400;
-  color: var(--text-muted);
-  font-size: 0.82rem;
-}
-
 .result-snippet {
   margin: 0;
   font-size: 0.85rem;
@@ -275,7 +269,34 @@ body {
   color: var(--text-muted);
 }
 
+/* --- Klinische kenmerken als opsomming --- */
+
+.kenmerken-list {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.kenmerken-list li {
+  margin-bottom: 4px;
+}
+
 /* --- Relaties --- */
+
+.relatie-details summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 0.85rem;
+  padding: 4px 0;
+  user-select: none;
+}
+
+.relatie-details summary:hover {
+  text-decoration: underline;
+}
+
+.relatie-details[open] summary {
+  margin-bottom: 10px;
+}
 
 .relatie-list {
   list-style: none;
@@ -308,6 +329,18 @@ body {
 
 .relatie-row p {
   margin: 4px 0;
+}
+
+.relatie-target-type {
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.relatie-uitleg {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-style: italic;
 }
 
 .link-button {

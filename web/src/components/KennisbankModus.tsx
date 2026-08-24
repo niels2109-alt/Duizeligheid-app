@@ -77,7 +77,7 @@ export function KennisbankModus() {
       <header className="app-header">
         <h1>Duizeligheid — Kennisbank (Modus B)</h1>
         <p className="hint">
-          Zoek-/filterinterface over de gevulde BPPV-content — los van elke reasoning-flow, puur
+          Zoek-/filterinterface over de gevulde BPPD-content — los van elke reasoning-flow, puur
           raadplegen. {rolUitleg}
         </p>
       </header>
