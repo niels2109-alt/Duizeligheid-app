@@ -417,3 +417,81 @@ body {
   font-size: 0.85rem;
   color: var(--text-muted);
 }
+
+/* --- AI-laag: vraag-paneel (stap 5) --- */
+.vraag-paneel {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.vraag-paneel h3 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+}
+
+.vraag-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.vraag-form input {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 9px 12px;
+  font-size: 0.95rem;
+}
+
+.antwoord-kaart {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.antwoord-kaart.escalatie {
+  border-color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.escalatie-label {
+  color: var(--danger);
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.antwoord-tekst {
+  white-space: pre-line;
+  margin: 0 0 10px;
+}
+
+.geen-antwoord {
+  color: var(--text-muted);
+  font-style: italic;
+  margin: 0;
+}
+
+.antwoord-meta {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* --- AI-samengestelde patiëntuitleg (in de flow-educatiestap) --- */
+.ai-educatie-blok {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.ai-educatie-blok h4 {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+}

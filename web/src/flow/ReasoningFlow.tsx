@@ -4,6 +4,7 @@ import { startSessie, postStap, zetAandoening } from "../sessies/api";
 import { HypothesePanel } from "./HypothesePanel";
 import { RedFlagModal } from "./RedFlagModal";
 import { SamenvattingPaneel } from "./SamenvattingPaneel";
+import { AiEducatieBlok } from "../ai/AiEducatieBlok";
 import { flowReducer, initialFlowState } from "./reducer";
 import { fmtLabel } from "./logic";
 import type { FlowInterventie, FlowTest } from "./types";
@@ -423,6 +424,7 @@ export function ReasoningFlow() {
               <p>
                 <strong>Verwachtingsmanagement:</strong> {flow.educatie.verwachtingsmanagement}
               </p>
+              <AiEducatieBlok eduId={flow.educatie.id} />
               <p className="hint">
                 Vrijgave is een losse, expliciete actie — nooit automatisch getoond aan een patiëntaccount (§2.1 punt 7).
               </p>

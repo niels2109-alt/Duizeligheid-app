@@ -1,10 +1,10 @@
-# Duizeligheid — server (stap 1 + 2 + 3 + 4)
+# Duizeligheid — server (stap 1 t/m 5)
 
 Bevat het datamodel + BPPV-content (**stap 1**), de API voor Modus B,
 kennisbank raadplegen (**stap 2**), de databundel voor Modus A, de
-reasoning-flow (**stap 3**), en Sessie-opslag + authenticatie + encryptie
-(**stap 4**), uit `Duizeligheid-Technische-Requirements-MVP.md` §6.2. Voor
-de bijbehorende interfaces, zie `../web`.
+reasoning-flow (**stap 3**), Sessie-opslag + authenticatie + encryptie
+(**stap 4**), en de AI-laag (**stap 5**), uit `Duizeligheid-Technische-
+Requirements-MVP.md` §6.2. Voor de bijbehorende interfaces, zie `../web`.
 
 ## Stack
 
@@ -200,3 +200,47 @@ p.stapLog.findMany().then(rows => { rows.forEach(r => console.log(r.bevindingEnc
 ```
 Dit toont onleesbare tekst — de API (via `src/crypto.ts`) ontsleutelt pas bij
 het uitlezen.
+
+## AI-laag (stap 5)
+
+Vertaling van requirements §3 (referentiedocument §12/§20). Kernprincipe:
+de kennisbank is de bron, AI is een vertaal-/presentatielaag — nooit
+zelfstandige bron van medische waarheid. Twee lagen:
+
+1. **Deterministische kern** (`src/ai.ts`) — tokenoverlap-matching over
+   KnowledgeObjects en Relaties (geen embeddings/vector search, bewust
+   buiten scope), met: verplichte object_ids-lijst per antwoord
+   (traceerbaarheid), een expliciete "niet in kennisbank"-melding bij geen
+   match (nooit stilzwijgend aangevuld), en escalatie — een gedeeltelijke
+   match met een `actietype = acuut_verwijzen`-relatie zet de voorzichtigste
+   interpretatie altijd vooraan, ongeacht ruwe matchscore. **Werkt volledig
+   zonder API-sleutel** — dit is een vereiste, geen bijzaak: de kern moet
+   zonder AI-toegang testbaar zijn.
+2. **Optionele Claude-verfijningslaag** (`src/claude.ts`, `@anthropic-ai/
+   sdk`) — herformuleert alleen de door de deterministische stap al
+   bepaalde tekst, met een strikte system-prompt die nieuwe feiten verbiedt
+   en waarschuwingen/rode vlaggen verplicht minstens even nadrukkelijk
+   laat staan. Alleen actief met `ANTHROPIC_API_KEY` in `.env`; zonder
+   sleutel (of bij een falende aanroep) valt het systeem stil terug op de
+   deterministische tekst — **in deze bouwronde niet live getest, geen
+   sleutel beschikbaar in de ontwikkelomgeving.**
+
+| Endpoint | Omschrijving |
+|---|---|
+| `POST /api/ai/vraag` | `{vraag}` + `?rol=` → traceerbaar antwoord (`objectIds`, `evidenceNiveaus`, `escalatie`, `geenAntwoord`, `bron`) |
+| `GET /api/ai/educatie/:id?rol=` | Samengevoegde, patiëntvriendelijke presentatie van een patiënteducatie-item + zijn signaleringsrelaties (referentiedocument §12: "meerdere red flags samenvoegen tot patiëntvriendelijke lijst, zoals bij EDU-001") |
+
+Beide vereisen een ingelogde sessie — dit is professioneel gereedschap
+binnen de app, geen publiek patiënt-chatkanaal (patiënten hebben in dit
+product geen eigen account, referentiedocument §24).
+
+**Bekende beperking van de eenvoudige matching**: puur tokenoverlap kan bij
+meerdere gelijktijdig matchende signalen het klinisch minder kenmerkende
+signaal soms als eerste tonen (bijv. bij een vraag die toevallig met twee
+red flags overlapt) — de escalatie zelf (tonen, niet onderdrukken) is altijd
+correct, alleen de onderlinge volgorde binnen de escalatie is niet
+klinisch-gewogen. Een domein-stopwoordenlijst (`STOPWOORDEN` in `src/ai.ts`,
+inclusief generieke termen als "patiënt" die in bijna elke kennisbank-tekst
+voorkomen) en woordgrens-matching (i.p.v. ruwe substring) verkleinen dit
+al aanzienlijk, maar vector-/embedding-matching zou dit verder verbeteren —
+bewust buiten scope voor deze MVP-stap.

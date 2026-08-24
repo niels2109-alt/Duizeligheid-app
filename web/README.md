@@ -1,14 +1,16 @@
-# Duizeligheid — web (stap 2 + 3 + 4)
+# Duizeligheid — web (stap 2 t/m 5)
 
 React/Vite-frontend, achter een individueel therapeut-login (`src/auth/`,
 stap 4), met drie tabs:
 
 - **Modus A — Reasoning-flow** (`src/flow/`, stap 3, requirements §2.1): de
   interactieve BPPV-triage-tot-behandelstrategie-flow — logt sinds stap 4
-  elke stap live weg naar een Sessie.
+  elke stap live weg naar een Sessie, en toont sinds stap 5 een
+  AI-samengestelde patiëntvriendelijke uitleg vóór de vrijgave.
 - **Modus B — Kennisbank raadplegen** (`src/components/KennisbankModus.tsx`,
   stap 2, requirements §2.2): een vrije zoek-/filterfunctie over de gevulde
-  BPPV-kennisbank, los van elke reasoning-flow. Geen sessies, geen logging.
+  BPPV-kennisbank, los van elke reasoning-flow, met sinds stap 5 ook een
+  vrije-tekst-vraagpaneel (`src/ai/`) bovenaan. Geen sessies, geen logging.
 - **Mijn sessies** (`src/sessies/`, stap 4, requirements §27): eerdere,
   nog niet-verlopen sessies terugkijken en exporteren.
 
@@ -87,13 +89,28 @@ kopieer-, print- en exporteerknoppen (requirements §2.3).
   sessies (§5.1) + detailweergave met samenvatting, alle stappen, en een
   exporteerknop — requirements §27 ("terugkijken op een eerder consult").
 
+## AI-laag (stap 5)
+
+- **`src/ai/VraagPaneel.tsx`** (in Modus B): vrije-tekst-vraag aan de
+  kennisbank. Toont altijd het antwoord mét de gebruikte object-id's en
+  evidence-niveaus (traceerbaarheid), een expliciete melding bij geen match,
+  en een rode waarschuwingskaart bij escalatie (een gedeeltelijke match met
+  een `actietype = acuut_verwijzen`-relatie) — nooit stil weggelaten of
+  afgezwakt.
+- **`src/ai/AiEducatieBlok.tsx`** (in Modus A, stap "Patiënteducatie"): de
+  AI-samengestelde, patiëntvriendelijke versie van het educatie-item + zijn
+  samengevoegde alarmsignalen, zichtbaar vóór de vrijgave-knop — de
+  therapeut ziet dus precies wat er zou worden vrijgegeven, met bron-
+  object-id's, vóórdat vrijgave een aparte, expliciete handeling is
+  (ongewijzigd t.o.v. stap 3).
+
 ## Structuur
 
 ```
 src/api.ts                       Fetch-helpers naar de Modus B-API
 src/types.ts                     Types die de Modus B-API-responses spiegelen
 src/App.tsx                      Shell: auth-gate + modus-tabs (A/B/Sessies)
-src/components/KennisbankModus.tsx    Modus B: zoeken/filteren/detail
+src/components/KennisbankModus.tsx    Modus B: zoeken/filteren/detail + vraagpaneel
 src/components/SearchFilters.tsx Zoekbalk, rol-wisselknop, type-/tier-filters
 src/components/ResultsList.tsx   Resultatenlijst
 src/components/ObjectDetailPanel.tsx  Detailweergave inclusief relaties
@@ -108,5 +125,8 @@ src/auth/AuthContext.tsx         AuthProvider/useAuth
 src/auth/AuthScreen.tsx          Login-/registratieformulier
 src/auth/api.ts                  Fetch-helpers naar /api/auth/*
 src/sessies/SessiesOverzicht.tsx "Mijn sessies": lijst + detail + exporteren
+src/ai/VraagPaneel.tsx           Vrije-tekst-vraag met traceerbaar/escalerend antwoord
+src/ai/AiEducatieBlok.tsx        AI-samengestelde patiëntuitleg in de flow
+src/ai/api.ts                    Fetch-helpers naar /api/ai/*
 src/sessies/api.ts               Fetch-helpers naar /api/sessies/*
 ```

@@ -1,6 +1,7 @@
 /**
  * Server-ingang — bundelt Modus B (§2.2, stap 2), Modus A-databundel
- * (§2.1, stap 3), en authenticatie + sessies (§5.2, §1.5/§2.3, stap 4).
+ * (§2.1, stap 3), authenticatie + sessies (§5.2, §1.5/§2.3, stap 4), en de
+ * AI-laag (§3, stap 5).
  *
  * Modus B zelf blijft puur read-only: geen koppeling aan een Sessie, geen
  * sessie-logging (§2.2) — dat gedrag is ongewijzigd t.o.v. stap 2.
@@ -16,6 +17,7 @@ import { parseJsonField } from "./serialize";
 import { flowRouter } from "./flow";
 import { authRouter } from "./auth";
 import { sessiesRouter } from "./sessies";
+import { aiRouter } from "./ai";
 import { startSessieOpschoning } from "./cleanup";
 
 const app = express();
@@ -27,6 +29,7 @@ app.use(cookieParser());
 app.use("/api/flow", flowRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/sessies", sessiesRouter);
+app.use("/api/ai", aiRouter);
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
 

@@ -3,6 +3,7 @@ import { fetchMeta, fetchObjectDetail, searchObjects } from "../api";
 import { SearchFilters } from "./SearchFilters";
 import { ResultsList } from "./ResultsList";
 import { ObjectDetailPanel } from "./ObjectDetailPanel";
+import { VraagPaneel } from "../ai/VraagPaneel";
 import type { ObjectDetail, ObjectSummary, Rol, TypeObject } from "../types";
 
 export function KennisbankModus() {
@@ -82,6 +83,8 @@ export function KennisbankModus() {
       </header>
 
       {error && <p className="error">{error}</p>}
+
+      <VraagPaneel rol={rol} />
 
       <SearchFilters
         rol={rol}
