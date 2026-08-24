@@ -13,7 +13,9 @@ volgende begint.
   referentiedocument §2-6.
 - ✅ **Stap 2 — Modus B: kennisbank raadplegen** (`server/` API + `web/`):
   zoek-/filterinterface over de gevulde data, los van elke reasoning-flow.
-- ⬜ Stap 3 — Modus A: reasoning-flow
+- ✅ **Stap 3 — Modus A: reasoning-flow** (`server/` API + `web/`): de
+  interactieve BPPV-triage-tot-behandelstrategie-flow, met rode-vlag-
+  interrupt en een doorlopend zichtbaar redeneerspoor.
 - ⬜ Stap 4 — Sessie + samenvatting, authenticatie, encryptie
 - ⬜ Stap 5 — AI-laag
 
@@ -21,10 +23,10 @@ volgende begint.
 
 ```
 server/   Datamodel (Prisma/SQLite) + seed met BPPV-content + Express-API
-web/      React/Vite-frontend: zoek-/filterinterface op de API
+web/      React/Vite-frontend: Modus A (reasoning-flow) + Modus B (kennisbank)
 ```
 
-## Draaien (stap 1 + 2)
+## Draaien (stap 1-3)
 
 ```bash
 # Backend + database

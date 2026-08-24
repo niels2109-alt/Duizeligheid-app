@@ -1,4 +1,5 @@
 import type { ObjectDetail, ObjectSummary, Rol, TypeObject } from "./types";
+import type { FlowData } from "./flow/types";
 
 export async function fetchMeta(): Promise<{ types: TypeObject[]; tiers: number[] }> {
   const res = await fetch("/api/meta");
@@ -27,5 +28,11 @@ export async function fetchObjectDetail(id: string, rol: Rol): Promise<ObjectDet
   const res = await fetch(`/api/objects/${encodeURIComponent(id)}?rol=${rol}`);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error("Kon detail niet ophalen.");
+  return res.json();
+}
+
+export async function fetchFlowData(): Promise<FlowData> {
+  const res = await fetch("/api/flow/bppv");
+  if (!res.ok) throw new Error("Kon reasoning-flow-data niet ophalen.");
   return res.json();
 }

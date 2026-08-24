@@ -1,0 +1,473 @@
+/* Modus-tabs (App.tsx) */
+.modus-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.modus-tabs button {
+  border: 1px solid var(--border);
+  background: var(--panel-bg);
+  border-radius: var(--radius);
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.modus-tabs button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+}
+
+/* Layout: hoofdkolom + hypothese-paneel */
+.flow-layout {
+  display: grid;
+  grid-template-columns: 1fr minmax(260px, 340px);
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .flow-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.flow-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.flow-step {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 22px;
+}
+
+.flow-step h2 {
+  margin: 4px 0 10px;
+}
+
+.flow-step > p {
+  margin-bottom: 10px;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.flow-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.btn-primary,
+.btn-secondary {
+  border-radius: var(--radius);
+  padding: 9px 16px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-color: var(--accent);
+}
+
+.btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: var(--panel-bg);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+/* --- Triage --- */
+.triage-opties {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.triage-card {
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  background: var(--bg);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.triage-card:hover {
+  border-color: var(--accent);
+}
+
+.followup-link {
+  margin-top: 4px;
+}
+
+.veiligheidshint {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  margin-top: 8px;
+}
+
+/* --- Anamnese / contra-indicatie-checklist --- */
+.anamnese-list {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.anamnese-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+}
+
+.anamnese-item p {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+}
+
+.anamnese-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.chip-toggle {
+  border: 1px solid var(--border);
+  background: var(--panel-bg);
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.chip-toggle.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+}
+
+/* --- Testselectie --- */
+.test-list,
+.interventie-list {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bevinding-keuze {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.bevinding-keuze h3 {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+}
+
+.bevinding-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bevinding-optie {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  background: var(--bg);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.88rem;
+}
+
+.bevinding-optie:hover {
+  border-color: var(--accent);
+}
+
+/* --- Interpretatiescherm --- */
+.interpretatie-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  background: var(--bg);
+  margin-bottom: 4px;
+}
+
+.interpretatie-card p {
+  margin: 4px 0;
+}
+
+.meta-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+/* --- Contra-indicatie-check --- */
+.ci-check {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.ci-check h3 {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+}
+
+/* --- Badges hergebruikt (basis .badge komt uit App.css) --- */
+.badge.evidence {
+  background: #e6f4ea;
+  color: #1e7a34;
+  text-transform: capitalize;
+}
+
+.badge.critical {
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.badge.mono {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.72rem;
+}
+
+/* --- Rode-vlag-modal --- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 20, 25, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 20px;
+}
+
+.modal-card {
+  background: var(--panel-bg);
+  border-radius: var(--radius);
+  border: 2px solid var(--danger);
+  padding: 24px;
+  max-width: 440px;
+  width: 100%;
+}
+
+.modal-eyebrow {
+  color: var(--danger);
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  margin: 0 0 6px;
+}
+
+.modal-card h2 {
+  margin: 0 0 10px;
+}
+
+.modal-interpretatie {
+  margin: 0 0 8px;
+}
+
+.modal-actie {
+  margin: 0 0 18px;
+  text-transform: capitalize;
+}
+
+/* --- Interrupt-banner (na bevestiging, vóór keuze) --- */
+.interrupt-banner {
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.interrupt-banner p {
+  margin: 0 0 10px;
+  color: var(--danger);
+}
+
+.interrupt-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* --- Hypothese-paneel --- */
+.hypothese-panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  position: sticky;
+  top: 16px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+
+.hypothese-panel h3 {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+}
+
+.hypothese-panel h3.trail-heading {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.hypothese-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hypothese-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  border-left-width: 3px;
+}
+
+.hypothese-item.weging-hoog {
+  border-left-color: #1e7a34;
+}
+.hypothese-item.weging-matig {
+  border-left-color: #9a6300;
+}
+.hypothese-item.weging-laag {
+  border-left-color: var(--text-muted);
+}
+.hypothese-item.weging-uitgesloten {
+  border-left-color: var(--danger);
+}
+
+.hypothese-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.hypothese-naam {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.weging-badge {
+  font-size: 0.68rem;
+}
+
+.weging-badge.weging-hoog {
+  background: #e6f4ea;
+  color: #1e7a34;
+}
+.weging-badge.weging-matig {
+  background: #fff4e0;
+  color: #9a6300;
+}
+.weging-badge.weging-laag {
+  background: var(--chip-bg);
+  color: var(--text-muted);
+}
+.weging-badge.weging-uitgesloten {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.hypothese-note {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 4px 0 0;
+}
+
+.redenen-list {
+  margin: 6px 0 0;
+  padding-left: 16px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.trail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.trail-list li {
+  border-left: 2px solid var(--border);
+  padding-left: 10px;
+}
+
+.trail-stap {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.trail-list p {
+  margin: 3px 0 4px;
+  font-size: 0.82rem;
+}
+
+.trail-meta {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}

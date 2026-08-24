@@ -12,10 +12,12 @@ import { TypeObject } from "@prisma/client";
 import { prisma } from "./prisma";
 import { parseRol, zichtbaarheidsFilter, isZichtbaarVoor } from "./visibility";
 import { parseJsonField } from "./serialize";
+import { flowRouter } from "./flow";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use("/api/flow", flowRouter);
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
 

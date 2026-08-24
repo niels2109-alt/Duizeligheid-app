@@ -1,8 +1,9 @@
-# Duizeligheid — server (stap 1 + 2)
+# Duizeligheid — server (stap 1 + 2 + 3)
 
-Bevat het datamodel + BPPV-content (**stap 1**) én de API voor Modus B,
-kennisbank raadplegen (**stap 2**), uit `Duizeligheid-Technische-Requirements-
-MVP.md` §6.2. Voor de bijbehorende zoek-/filterinterface, zie `../web`.
+Bevat het datamodel + BPPV-content (**stap 1**), de API voor Modus B,
+kennisbank raadplegen (**stap 2**), en de databundel voor Modus A, de
+reasoning-flow (**stap 3**), uit `Duizeligheid-Technische-Requirements-
+MVP.md` §6.2. Voor de bijbehorende interfaces, zie `../web`.
 
 ## Stack
 
@@ -107,3 +108,21 @@ de request zelf (gezet door de rol-wisselknop in `../web`). De
 zichtbaarheidsregel zélf wordt al wel echt afgedwongen (zowel op het
 opgevraagde object als op elke relatie ernaartoe/vanuit), alleen de identiteit
 van de gebruiker nog niet geverifieerd. Zie `src/visibility.ts`.
+
+## Reasoning-flow-databundel (stap 3 — Modus A)
+
+`GET /api/flow/bppv` (`src/flow.ts`) levert één samengestelde bundel met alle
+KnowledgeObjects/relaties die de BPPV-reasoning-flow nodig heeft (hypothesen,
+anamnese-checks, testen met hun bevindingen, interventies met hun
+contra-indicaties, patiënteducatie) — zodat de frontend niet zelf meerdere
+calls hoeft te combineren. De reasoning zelf (hypotheseweging, rode-vlag-
+interrupt, stapmachine) gebeurt client-side in `../web/src/flow/` — deze
+route levert alleen de brondata.
+
+Scope-beslissingen (afgestemd met opdrachtgever): de triage houdt bewust
+meerdere hypothesen open (BPPV + alle differentiaaldiagnose-kandidaten uit
+stap 1), maar alleen BPPV heeft in deze bouwronde echte anamnese-/test-/
+interventiecontent — voor de overige (stub-)hypothesen toont de frontend
+expliciet "nog niet volledig uitgewerkt" i.p.v. te doen alsof er geredeneerd
+wordt. Follow-up-consult (workflow-stap 7) is een lichte, handmatige instap
+zonder echte sessiehistorie — Sessie-opslag hoort bij stap 4.
