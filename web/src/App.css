@@ -206,6 +206,7 @@ body {
 
 .badge {
   display: inline-block;
+  align-self: flex-start; /* voorkomt uitrekken tot volledige breedte als direct kind van een flex-column-kaart (bijv. .result-card) */
   font-size: 0.72rem;
   padding: 2px 8px;
   border-radius: 999px;
