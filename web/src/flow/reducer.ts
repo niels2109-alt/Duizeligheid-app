@@ -5,6 +5,7 @@ export const initialFlowState: FlowState = {
   flow: null,
   laden: true,
   fout: null,
+  sessieId: null,
   stap: "triage",
   hypotheses: [],
   gekozenTriageId: null,
@@ -35,6 +36,9 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
 
     case "LADEN_FOUT":
       return { ...state, laden: false, fout: action.fout };
+
+    case "SESSIE_GESTART":
+      return { ...state, sessieId: action.sessieId };
 
     case "KIES_TRIAGE": {
       if (!state.flow) return state;
@@ -82,6 +86,7 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
           ...state.trail,
           trailEntry(
             "Triage",
+            "triage",
             `Triagekenmerk gekozen: ${gekozen}.`,
             [action.id],
             isBppv ? state.flow.aandoening.evidenceNiveau : null
@@ -101,7 +106,13 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
         ...state,
         interrupt: null,
         stap: "verwezen",
-        trail: [...state.trail, trailEntry("Rode vlag", "Traject beëindigd: patiënt verwezen.", [], null)],
+        trail: [
+          ...state.trail,
+          // stapType: null — voegt geen nieuwe klinische bevinding toe naast
+          // de anamnese-/test-entry die de rode vlag al triggerde (zie
+          // types.ts), dus geen eigen StapLog-rij.
+          trailEntry("Rode vlag", null, "Traject beëindigd: patiënt verwezen.", [], null),
+        ],
       };
 
     case "NA_INTERRUPT_DOORGAAN":
@@ -110,7 +121,7 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
         interrupt: null,
         trail: [
           ...state.trail,
-          trailEntry("Rode vlag", "Therapeut kiest, op eigen klinisch oordeel, om door te gaan.", [], null),
+          trailEntry("Rode vlag", null, "Therapeut kiest, op eigen klinisch oordeel, om door te gaan.", [], null),
         ],
       };
 
@@ -131,6 +142,7 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
           ...trail,
           trailEntry(
             "Anamnese",
+            "anamnese",
             `${check.bevinding} → ${check.interpretatie}`,
             [check.redFlagId],
             check.evidenceNiveau
@@ -157,8 +169,16 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
     case "GA_NAAR_TESTSELECTIE":
       return { ...state, stap: "test-select" };
 
-    case "KIES_TEST":
-      return { ...state, gekozenTestId: action.testId };
+    case "KIES_TEST": {
+      const test = state.flow?.testen.find((t) => t.id === action.testId);
+      return {
+        ...state,
+        gekozenTestId: action.testId,
+        trail: test
+          ? [...state.trail, trailEntry("Testselectie", "test", `Gekozen test: ${test.naam}.`, [test.id], test.evidenceNiveau)]
+          : state.trail,
+      };
+    }
 
     case "KIES_BEVINDING": {
       if (!state.flow || !state.gekozenTestId) return state;
@@ -207,7 +227,8 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
         trail: [
           ...state.trail,
           trailEntry(
-            "Test",
+            "Interpretatie",
+            "interpretatie",
             `${bevinding.bevinding} → ${bevinding.interpretatie}`,
             [test.id, bevinding.naarObjectId],
             bevinding.evidenceNiveau
@@ -244,6 +265,7 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
           ...state.trail,
           trailEntry(
             "Behandelstrategie",
+            "strategie",
             `Gekozen interventie: ${interventie?.naam ?? state.gekozenInterventieId}.` +
               (aanwezigeCis.length > 0
                 ? ` Aanwezige contra-indicaties: ${aanwezigeCis.map((c) => c.naam).join(", ")}.`
@@ -261,7 +283,13 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
         eduVrijgegeven: true,
         trail: [
           ...state.trail,
-          trailEntry("Patiënteducatie", "Educatie vrijgegeven aan patiënt.", state.flow?.educatie ? [state.flow.educatie.id] : [], null),
+          trailEntry(
+            "Patiënteducatie",
+            "educatie",
+            "Educatie vrijgegeven aan patiënt.",
+            state.flow?.educatie ? [state.flow.educatie.id] : [],
+            null
+          ),
         ],
       };
 
@@ -273,16 +301,31 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
         ...initialFlowState,
         flow: state.flow,
         laden: false,
+        // sessieId bewust null: een vervolgconsult is een nieuwe Sessie
+        // (referentiedocument §22 stap 7 is een eigen consult-moment) — het
+        // omringende component merkt sessieId===null en start er één.
         hypotheses: state.flow ? bouwHypothesen(state.flow) : [],
         stap: "followup-entry",
       };
 
-    case "FOLLOWUP_INTERVENTIE":
+    case "FOLLOWUP_INTERVENTIE": {
+      const interventie = state.flow?.interventies.find((i) => i.id === action.interventieId);
       return {
         ...state,
         followup: { ...state.followup, vorigeInterventieId: action.interventieId },
         stap: "followup-uitkomst",
+        trail: [
+          ...state.trail,
+          trailEntry(
+            "Follow-up",
+            "followup",
+            `Vervolgconsult — eerder toegepaste interventie: ${interventie?.naam ?? action.interventieId}.`,
+            [action.interventieId],
+            null
+          ),
+        ],
       };
+    }
 
     case "FOLLOWUP_UITKOMST": {
       const followup = { ...state.followup, uitkomst: action.uitkomst };
@@ -296,14 +339,14 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
           stap: "test-select",
           trail: [
             ...state.trail,
-            trailEntry("Follow-up", "Kanaalconversie vermoed — terug naar testselectie.", [], null),
+            trailEntry("Follow-up", "followup", "Kanaalconversie vermoed — terug naar testselectie.", [], null),
           ],
         };
       }
       return {
         ...state,
         followup,
-        trail: [...state.trail, trailEntry("Follow-up", `Uitkomst: ${action.uitkomst}.`, [], null)],
+        trail: [...state.trail, trailEntry("Follow-up", "followup", `Uitkomst: ${action.uitkomst}.`, [], null)],
       };
     }
 
@@ -312,6 +355,7 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
         ...initialFlowState,
         flow: state.flow,
         laden: false,
+        // sessieId bewust null — zie toelichting bij START_FOLLOWUP.
         hypotheses: state.flow ? bouwHypothesen(state.flow) : [],
       };
 

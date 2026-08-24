@@ -1,9 +1,10 @@
-# Duizeligheid — server (stap 1 + 2 + 3)
+# Duizeligheid — server (stap 1 + 2 + 3 + 4)
 
 Bevat het datamodel + BPPV-content (**stap 1**), de API voor Modus B,
-kennisbank raadplegen (**stap 2**), en de databundel voor Modus A, de
-reasoning-flow (**stap 3**), uit `Duizeligheid-Technische-Requirements-
-MVP.md` §6.2. Voor de bijbehorende interfaces, zie `../web`.
+kennisbank raadplegen (**stap 2**), de databundel voor Modus A, de
+reasoning-flow (**stap 3**), en Sessie-opslag + authenticatie + encryptie
+(**stap 4**), uit `Duizeligheid-Technische-Requirements-MVP.md` §6.2. Voor
+de bijbehorende interfaces, zie `../web`.
 
 ## Stack
 
@@ -56,8 +57,8 @@ Tier 3-objecten `zichtbaar_patient = false` hebben.
 
 - **Schema** (`prisma/schema.prisma`): `KnowledgeObject`, `Relatie`,
   `PatientEducatieObject` — rechtstreekse vertaling van requirements §1.1,
-  1.3, 1.4. De `Sessie`/`StapLog`-entiteiten (§1.5) zijn hier bewust nog niet
-  gebouwd; die horen bij bouwstap 4 (§6.2).
+  1.3, 1.4. `Sessie`/`StapLog` (§1.5) en `Therapeut` (§5.2) zijn toegevoegd
+  in stap 4 — zie de sectie daarover onderaan dit document.
 - **Seed** (`prisma/seed.ts`): 26 knowledge objects, 33 relaties, 1
   patiënteducatie-object. Zie de uitgebreide toelichting bovenaan dat bestand
   voor de modelleringsbeslissingen (afgestemd met de opdrachtgever) en de
@@ -102,12 +103,18 @@ Endpoints:
 | `GET /api/objects/:id?rol=` | Volledig detail van één object, inclusief relaties in beide richtingen. 404 als het object niet bestaat of niet zichtbaar is voor de opgegeven rol |
 | `GET /api/health` | Health check |
 
-**Over de `rol`-parameter**: er is in deze bouwstap nog geen echte
-authenticatie (die hoort bij stap 4, §5.2) — de rol komt hier voorlopig uit
-de request zelf (gezet door de rol-wisselknop in `../web`). De
-zichtbaarheidsregel zélf wordt al wel echt afgedwongen (zowel op het
-opgevraagde object als op elke relatie ernaartoe/vanuit), alleen de identiteit
-van de gebruiker nog niet geverifieerd. Zie `src/visibility.ts`.
+**Over de `rol`-parameter**: dit blijft een contentweergave-schakelaar
+(therapeut/patiënt), los van de echte authenticatie die stap 4 toevoegt —
+patiënten hebben in dit product geen eigen account (referentiedocument §24:
+toegang alleen via een door de therapeut vrijgegeven educatie-item, geen
+zelfstandige kennisbanktoegang), dus er valt voor die kant niets te
+authenticeren. De `rol` komt daarom nog steeds uit de request zelf (gezet
+door de rol-wisselknop in `../web`); Modus B blijft bewust een puur
+read-only naslagfunctie zonder sessiekoppeling (§2.2). De echte
+authenticatie uit stap 4 beschermt wél de Sessie-endpoints hieronder (elke
+Sessie hoort bij precies één ingelogde therapeut). Zichtbaarheidsregels
+zelf worden zowel op het opgevraagde object als op elke relatie
+ernaartoe/vanuit afgedwongen — zie `src/visibility.ts`.
 
 ## Reasoning-flow-databundel (stap 3 — Modus A)
 
@@ -125,4 +132,71 @@ stap 1), maar alleen BPPV heeft in deze bouwronde echte anamnese-/test-/
 interventiecontent — voor de overige (stub-)hypothesen toont de frontend
 expliciet "nog niet volledig uitgewerkt" i.p.v. te doen alsof er geredeneerd
 wordt. Follow-up-consult (workflow-stap 7) is een lichte, handmatige instap
-zonder echte sessiehistorie — Sessie-opslag hoort bij stap 4.
+zonder echte sessiehistorie-lookup — zie hieronder voor hoe de sessie er nu
+wél echt naast bijgehouden wordt.
+
+## Authenticatie + Sessie-opslag + encryptie (stap 4)
+
+Drie eisen uit §6.2 die "vanaf het begin meebouwen" moesten, niet los erbij:
+
+### Authenticatie (§5.2)
+
+Individueel account per therapeut, e-mail + wachtwoord (bcrypt, 12 rounds)
+— geen magic link (zou een externe e-mailprovider vereisen, niet
+zelfstandig end-to-end testbaar in deze omgeving), geen 2FA/SSO. Sessie-
+cookie met een JWT (7 dagen geldig, `httpOnly`, `sameSite=lax`). Zie
+`src/auth.ts`.
+
+| Endpoint | Omschrijving |
+|---|---|
+| `POST /api/auth/register` | `{email, wachtwoord}` → account + ingelogd |
+| `POST /api/auth/login` | `{email, wachtwoord}` → ingelogd |
+| `POST /api/auth/logout` | Cookie wissen |
+| `GET /api/auth/me` | Huidige therapeut, of 401 |
+
+### Sessie + sessie-samenvatting (§1.5, §2.3)
+
+Elke Sessie hoort bij precies één therapeut (`requireAuth`-middleware op
+`src/sessies.ts`, met een expliciete eigenaarschapscheck per request — een
+andere therapeut krijgt 404, niet 403, om niet te lekken dát de sessie
+bestaat). Bevat bewust geen patiëntnaam (§1.5).
+
+| Endpoint | Omschrijving |
+|---|---|
+| `POST /api/sessies` | Start een sessie, zet `vervalt_op` = nu + 90 dagen |
+| `GET /api/sessies` | Eigen, nog niet-verlopen sessies |
+| `PATCH /api/sessies/:id` | `{aandoeningId}` — gezet zodra de flow convergeert |
+| `POST /api/sessies/:id/stappen` | Eén StapLog toevoegen |
+| `GET /api/sessies/:id` | Detail + live opgebouwde samenvatting (of de bevroren versie, ná export) |
+| `POST /api/sessies/:id/export` | Genereert + bewaart de definitieve samenvatting, zet `vervalt_op` = nu |
+
+### Bewaartermijn (§5.1)
+
+90 dagen na start, of direct bij export. Een simpele in-process opschoning
+(`src/cleanup.ts`, elk uur + eenmaal bij opstarten) verwijdert sessies waarvan
+`vervalt_op` is bereikt — `StapLog`-rijen verdwijnen automatisch mee
+(`onDelete: Cascade`). Een losstaande cronjob is de gebruikelijke
+productie-opzet hiervoor; dat is een hostingbeslissing die buiten deze
+lokale codebase valt, vandaar de in-process aanpak voor deze bouwstap.
+
+### Encryptie bij opslag (§5.3)
+
+`StapLog.bevinding` en `Sessie.samenvatting` — de klinische inhoud van een
+sessie (referentiedocument §23: bijzondere persoonsgegevens, ook zonder
+patiëntnaam) — worden versleuteld opgeslagen met AES-256-GCM
+(`src/crypto.ts`, sleutel uit `ENCRYPTION_KEY`). Wachtwoorden staan als
+bcrypt-hash, nooit in leesbare vorm. TLS bij verzending en een EU-gevestigde
+hostingprovider (de andere twee onderdelen van §5.3) zijn deployment-
+beslissingen die pas relevant worden bij een echte hosting-omgeving — niet
+iets dat vanuit deze lokale codebase af te dwingen valt.
+
+**Verifiëren dat het echt versleuteld is:**
+```bash
+node -e "
+const { PrismaClient } = require('@prisma/client');
+const p = new PrismaClient();
+p.stapLog.findMany().then(rows => { rows.forEach(r => console.log(r.bevindingEnc)); return p.\$disconnect(); });
+"
+```
+Dit toont onleesbare tekst — de API (via `src/crypto.ts`) ontsleutelt pas bij
+het uitlezen.

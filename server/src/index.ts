@@ -1,11 +1,12 @@
 /**
- * Modus B — Kennisbank raadplegen (requirements §2.2, bouwstap 2 uit §6.2).
+ * Server-ingang — bundelt Modus B (§2.2, stap 2), Modus A-databundel
+ * (§2.1, stap 3), en authenticatie + sessies (§5.2, §1.5/§2.3, stap 4).
  *
- * Vrije zoek-/filterfunctie over KnowledgeObject, filterbaar op type_object
- * en tier, met afdwinging van zichtbaar_therapeut/zichtbaar_patient per rol.
- * Puur read-only: geen koppeling aan een Sessie, geen sessie-logging (§2.2).
+ * Modus B zelf blijft puur read-only: geen koppeling aan een Sessie, geen
+ * sessie-logging (§2.2) — dat gedrag is ongewijzigd t.o.v. stap 2.
  */
 
+import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { Request, Response } from "express";
 import { TypeObject } from "@prisma/client";
@@ -13,11 +14,19 @@ import { prisma } from "./prisma";
 import { parseRol, zichtbaarheidsFilter, isZichtbaarVoor } from "./visibility";
 import { parseJsonField } from "./serialize";
 import { flowRouter } from "./flow";
+import { authRouter } from "./auth";
+import { sessiesRouter } from "./sessies";
+import { startSessieOpschoning } from "./cleanup";
 
 const app = express();
-app.use(cors());
+// origin: true weerspiegelt de Origin-header van het verzoek — nodig omdat
+// een wildcard-CORS-origin niet samengaat met credentials (de sessie-cookie).
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
+app.use(cookieParser());
 app.use("/api/flow", flowRouter);
+app.use("/api/auth", authRouter);
+app.use("/api/sessies", sessiesRouter);
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
 
@@ -177,5 +186,6 @@ app.get("/api/health", (_req: Request, res: Response) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Duizeligheid-API (Modus B) luistert op http://localhost:${PORT}`);
+  console.log(`Duizeligheid-API luistert op http://localhost:${PORT}`);
+  startSessieOpschoning();
 });

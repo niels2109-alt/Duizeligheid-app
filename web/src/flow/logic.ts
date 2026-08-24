@@ -37,11 +37,12 @@ export function zetWeging(
 
 export function trailEntry(
   stap: string,
+  stapType: ReasoningTrailEntry["stapType"],
   tekst: string,
   objectIds: string[],
   evidenceNiveau: string | null
 ): ReasoningTrailEntry {
-  return { stap, tekst, objectIds, evidenceNiveau };
+  return { stap, stapType, tekst, objectIds, evidenceNiveau };
 }
 
 export function fmtLabel(v: string | null | undefined): string {

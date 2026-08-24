@@ -1,9 +1,18 @@
-// Datamodel voor het Duizeligheid-platform — stap 1 (Bouwvolgorde §6.2)
+// Datamodel voor het Duizeligheid-platform — stap 1 + 4 (Bouwvolgorde §6.2)
 //
 // Vertaling van Duizeligheid-Technische-Requirements-MVP.md §1 naar Prisma/SQLite.
-// Scope van dit schema: KnowledgeObject, Relatie, PatiëntEducatieObject (§1.1, 1.2, 1.3, 1.4).
-// De Sessie- en StapLog-entiteiten (§1.5) horen bij bouwstap 4 (§6.2) en zijn hier
-// bewust nog niet opgenomen.
+// KnowledgeObject, Relatie, PatiëntEducatieObject: §1.1, 1.2, 1.3, 1.4 (stap 1).
+// Sessie, StapLog: §1.5 (stap 4). Therapeut is geen entiteit uit het
+// requirements-document zelf — nodig als minimale infrastructuur voor de
+// "individueel account per therapeut"-eis (§5.2), die het document wel
+// vaststelt maar geen datamodel voor geeft.
+//
+// Encryptie (§5.3, "encryptie bij opslag"): StapLog.bevinding en
+// Sessie.samenvatting bevatten de klinische (bijzondere-persoonsgegevens-)
+// inhoud van een sessie (§23) en worden versleuteld opgeslagen (AES-256-GCM,
+// zie src/crypto.ts) — vandaar de "Enc"-suffix op die velden. Overige
+// velden (object-id's, timestamps, stap-type) zijn geen patiëntgegevens en
+// blijven leesbaar voor filtering/sortering.
 
 generator client {
   provider = "prisma-client-js"
@@ -112,6 +121,17 @@ enum ActieType {
   samenwerking_adviseren
 }
 
+/// StapLog.stap_type — requirements §1.5.
+enum StapType {
+  triage
+  anamnese
+  test
+  interpretatie
+  strategie
+  educatie
+  followup
+}
+
 // ---------------------------------------------------------------------------
 // Entiteiten
 // ---------------------------------------------------------------------------
@@ -156,6 +176,8 @@ model KnowledgeObject {
   relatiesNaartoe Relatie[] @relation("NaarObject")
 
   patientEducatieObject PatientEducatieObject?
+
+  sessies Sessie[]
 
   @@map("knowledge_objects")
 }
@@ -227,4 +249,81 @@ model PatientEducatieObject {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("patient_educatie_objecten")
+}
+
+/// Therapeut — individueel account, requirements §5.2. Geen entiteit uit
+/// §1; minimale infrastructuur voor "individueel account per therapeut
+/// (e-mail + wachtwoord of magic link), geen gedeeld/generiek account".
+/// Hier gekozen voor e-mail + wachtwoord (bcrypt-hash) — zelfstandig te
+/// testen zonder een externe e-mailprovider, wat voor magic link wel nodig
+/// zou zijn. Geen 2FA/SSO, conform §5.2.
+model Therapeut {
+  id String @id @default(cuid())
+
+  email          String @unique
+  wachtwoordHash String @map("wachtwoord_hash")
+
+  aangemaaktOp DateTime @default(now()) @map("aangemaakt_op")
+
+  sessies Sessie[]
+
+  @@map("therapeuten")
+}
+
+/// Sessie — requirements §1.5. Bevat bewust geen patiëntnaam of ander
+/// direct identificerend gegeven (expliciete eis, §1.5) — identificatie
+/// (welke patiënt) blijft de verantwoordelijkheid van het bestaande EPD van
+/// de therapeut.
+model Sessie {
+  id String @id @default(cuid())
+
+  therapeutId String    @map("therapeut_id")
+  therapeut   Therapeut @relation(fields: [therapeutId], references: [id])
+
+  gestartOp DateTime @default(now()) @map("gestart_op")
+
+  /// Pas gezet zodra de flow convergeert op een hoofdhypothese (§1.5).
+  aandoeningId String?          @map("aandoening_id")
+  aandoening   KnowledgeObject? @relation(fields: [aandoeningId], references: [id])
+
+  stappen StapLog[]
+
+  /// Versleutelde samenvattingstekst — pas gevuld bij export (§2.3), zodat
+  /// de geëxporteerde tekst een vaste momentopname is. Vóór export wordt de
+  /// samenvatting on-the-fly uit `stappen` opgebouwd (GET /api/sessies/:id).
+  samenvattingEnc String? @map("samenvatting_enc")
+
+  geëxporteerdOp DateTime? @map("geexporteerd_op")
+
+  /// Verplicht, geen default (§1.5/§5.1, expliciete open beslissing uit het
+  /// requirements-document, hier vastgesteld op gestartOp + 90 dagen, of
+  /// "nu" zodra geëxporteerd — zie src/sessies.ts).
+  vervaltOp DateTime @map("vervalt_op")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("sessies")
+}
+
+/// StapLog — sub-object van Sessie, requirements §1.5.
+model StapLog {
+  id String @id @default(cuid())
+
+  sessieId String @map("sessie_id")
+  sessie   Sessie @relation(fields: [sessieId], references: [id], onDelete: Cascade)
+
+  stapType StapType @map("stap_type")
+
+  /// Array van gebruikte object-id's — als JSON-tekst opgeslagen. Geen
+  /// patiëntgegeven (verwijst alleen naar kennisbank-objecten), dus
+  /// onversleuteld.
+  objectIdsGebruikt String @map("object_ids_gebruikt")
+
+  /// Versleuteld (§5.3) — dit is de klinische inhoud van de stap.
+  bevindingEnc String? @map("bevinding_enc")
+
+  timestamp DateTime @default(now())
+
+  @@map("staplog")
 }

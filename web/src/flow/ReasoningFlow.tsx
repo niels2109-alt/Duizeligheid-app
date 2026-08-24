@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useReducer } from "react";
+import { useEffect, useMemo, useReducer, useRef } from "react";
 import { fetchFlowData } from "../api";
+import { startSessie, postStap, zetAandoening } from "../sessies/api";
 import { HypothesePanel } from "./HypothesePanel";
 import { RedFlagModal } from "./RedFlagModal";
+import { SamenvattingPaneel } from "./SamenvattingPaneel";
 import { flowReducer, initialFlowState } from "./reducer";
 import { fmtLabel } from "./logic";
 import type { FlowInterventie, FlowTest } from "./types";
@@ -25,6 +27,66 @@ export function ReasoningFlow() {
       .then((flow) => dispatch({ type: "LADEN_OK", flow }))
       .catch((e) => dispatch({ type: "LADEN_FOUT", fout: String(e) }));
   }, []);
+
+  // --- Sessie-opslag (§1.5/§2.3, stap 4) -------------------------------
+  // Deze effects zijn de enige plek waar de flow daadwerkelijk naar de
+  // server schrijft — de reducer zelf blijft een pure state-machine.
+
+  // Sessie pas aanmaken bij de EERSTE echte handeling (trail.length > 0 —
+  // meestal de triagekeuze), niet zodra de pagina/tab simpelweg openstaat.
+  // Anders zou elke app-load/reload een lege sessie achterlaten (geldt ook
+  // na RESET/START_FOLLOWUP, die sessieId en trail bewust resetten).
+  const sessieWordtGestartRef = useRef(false);
+  useEffect(() => {
+    if (state.trail.length === 0 || state.sessieId || sessieWordtGestartRef.current) return;
+    sessieWordtGestartRef.current = true;
+    startSessie()
+      .then((s) => {
+        dispatch({ type: "SESSIE_GESTART", sessieId: s.id });
+        sessieWordtGestartRef.current = false;
+      })
+      .catch(() => {
+        sessieWordtGestartRef.current = false;
+      });
+  }, [state.trail.length, state.sessieId]);
+
+  // Nieuwe trail-entries (met een stapType) synchroniseren als StapLog.
+  const gesyncTotRef = useRef(0);
+  useEffect(() => {
+    if (!state.sessieId) return;
+    const nieuw = state.trail.slice(gesyncTotRef.current);
+    if (nieuw.length === 0) return;
+    gesyncTotRef.current = state.trail.length;
+    nieuw
+      .filter((entry) => entry.stapType !== null)
+      .forEach((entry) => {
+        postStap(state.sessieId!, {
+          stapType: entry.stapType!,
+          objectIdsGebruikt: entry.objectIds,
+          bevinding: entry.tekst,
+        }).catch(() => {
+          /* best-effort: sessie-logging mag de flow zelf niet blokkeren */
+        });
+      });
+  }, [state.sessieId, state.trail]);
+  // Teller resetten bij een nieuwe sessie (vervolgconsult/nieuwe triage).
+  useEffect(() => {
+    gesyncTotRef.current = 0;
+  }, [state.sessieId]);
+
+  // aandoening_id koppelen zodra de flow convergeert op een bevestigd
+  // subtype (§1.5: "Pas gezet zodra de flow convergeert").
+  const aandoeningGezetRef = useRef(false);
+  useEffect(() => {
+    aandoeningGezetRef.current = false;
+  }, [state.sessieId]);
+  useEffect(() => {
+    if (!state.sessieId || !state.flow || !state.bevestigdeKwalificatie || aandoeningGezetRef.current) return;
+    aandoeningGezetRef.current = true;
+    zetAandoening(state.sessieId, state.flow.aandoening.id).catch(() => {
+      aandoeningGezetRef.current = false;
+    });
+  }, [state.sessieId, state.flow, state.bevestigdeKwalificatie]);
 
   const gekozenTest: FlowTest | undefined = useMemo(
     () => state.flow?.testen.find((t) => t.id === state.gekozenTestId),
@@ -144,6 +206,7 @@ export function ReasoningFlow() {
               <p className="eyebrow">Traject beëindigd</p>
               <h2>Patiënt verwezen</h2>
               <p>Het BPPV-traject is beëindigd op basis van de bevestigde rode vlag hierboven.</p>
+              {state.sessieId && <SamenvattingPaneel sessieId={state.sessieId} />}
               <button type="button" className="btn-primary" onClick={() => dispatch({ type: "RESET" })}>
                 Nieuwe triage starten
               </button>
@@ -379,10 +442,7 @@ export function ReasoningFlow() {
             <section className="flow-step">
               <p className="eyebrow">Afgerond</p>
               <h2>Sessie afgerond</h2>
-              <p className="hint">
-                Er is in deze bouwronde nog geen sessie-opslag (§1.5/stap 4) — dit redeneerspoor bestaat
-                alleen zolang deze pagina open staat.
-              </p>
+              {state.sessieId && <SamenvattingPaneel sessieId={state.sessieId} />}
               <div className="flow-actions">
                 <button type="button" className="btn-primary" onClick={() => dispatch({ type: "RESET" })}>
                   Nieuwe triage starten
@@ -400,7 +460,8 @@ export function ReasoningFlow() {
               <p className="eyebrow">Stap 7 · Follow-up-consult</p>
               <h2>Welke interventie werd eerder toegepast?</h2>
               <p className="hint">
-                Lichte, handmatige instap — er is nog geen sessiehistorie om automatisch op te halen (§1.5 hoort bij stap 4).
+                Lichte, handmatige instap — de therapeut geeft dit zelf aan, er wordt geen automatische
+                koppeling met een eerdere sessie gezocht (referentiedocument §22/§27).
               </p>
               <ul className="interventie-list">
                 {flow.interventies.map((i) => (
@@ -448,6 +509,7 @@ export function ReasoningFlow() {
                   )}
                   {state.followup.uitkomst === "herhaling" && <p>Herhaal de interventie.</p>}
                   {state.followup.uitkomst === "falen" && <p>Heroverweeg de hypothese, of verwijs door.</p>}
+                  {state.sessieId && <SamenvattingPaneel sessieId={state.sessieId} />}
                   <button type="button" className="btn-primary" onClick={() => dispatch({ type: "RESET" })}>
                     Nieuwe triage starten
                   </button>

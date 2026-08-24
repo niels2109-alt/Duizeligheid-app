@@ -1,12 +1,16 @@
-# Duizeligheid — web (stap 2 + 3: Modus A + Modus B)
+# Duizeligheid — web (stap 2 + 3 + 4)
 
-React/Vite-frontend met twee modi, geschakeld via de tabs bovenaan:
+React/Vite-frontend, achter een individueel therapeut-login (`src/auth/`,
+stap 4), met drie tabs:
 
 - **Modus A — Reasoning-flow** (`src/flow/`, stap 3, requirements §2.1): de
-  interactieve BPPV-triage-tot-behandelstrategie-flow.
+  interactieve BPPV-triage-tot-behandelstrategie-flow — logt sinds stap 4
+  elke stap live weg naar een Sessie.
 - **Modus B — Kennisbank raadplegen** (`src/components/KennisbankModus.tsx`,
   stap 2, requirements §2.2): een vrije zoek-/filterfunctie over de gevulde
   BPPV-kennisbank, los van elke reasoning-flow. Geen sessies, geen logging.
+- **Mijn sessies** (`src/sessies/`, stap 4, requirements §27): eerdere,
+  nog niet-verlopen sessies terugkijken en exporteren.
 
 ## Draaien
 
@@ -49,16 +53,23 @@ De doorlopend zichtbare `HypothesePanel` toont de gewogen hypothesenlijst
 (hoog/matig/laag, nooit een score) mét redenen, en een redeneerspoor van elke
 stap — het "geen black box"-principe uit referentiedocument §12/§22.
 
-Er is in deze bouwstap geen sessie-opslag: de flow-state leeft alleen in de
-browser zolang de pagina open staat (`src/flow/reducer.ts`); dat komt bij
-stap 4 met de `Sessie`-entiteit.
+**Sessie-koppeling (stap 4)**: `ReasoningFlow.tsx` start bij de eerste echte
+handeling (meestal de triagekeuze — niet zomaar bij het openen van de tab,
+anders zou elke paginaherlaad een lege sessie achterlaten) een `Sessie` via
+`POST /api/sessies`, synchroniseert daarna elke nieuwe redeneerspoor-entry
+als `StapLog`, en koppelt `aandoening_id` zodra een subtype bevestigd wordt.
+Op de afsluitende schermen (afgerond/verwezen/follow-up-resultaat) toont
+`SamenvattingPaneel.tsx` de live opgebouwde sessie-samenvatting met
+kopieer-, print- en exporteerknoppen (requirements §2.3).
 
 ## Modus B — Kennisbank raadplegen
 
-- **Rol-wisselknop** (Therapeut-weergave / Patiënt-weergave): simuleert de
-  gebruikersrol zolang er nog geen echte authenticatie is (die hoort bij
-  stap 4). De backend dwingt de zichtbaarheidsregel (`zichtbaar_therapeut`/
-  `zichtbaar_patient`) af op basis van deze rol — zie `server/src/visibility.ts`.
+- **Rol-wisselknop** (Therapeut-weergave / Patiënt-weergave): een
+  contentweergave-schakelaar, los van de echte authenticatie — patiënten
+  hebben in dit product geen eigen account (referentiedocument §24), dus
+  er valt voor die kant niets te authenticeren. De backend dwingt de
+  zichtbaarheidsregel (`zichtbaar_therapeut`/`zichtbaar_patient`) af op
+  basis van deze rol — zie `server/src/visibility.ts`.
 - **Zoeken** op naam/kernbeschrijving/klinische kenmerken, **filteren** op
   objecttype en tier (requirements §2.2).
 - **Detailweergave** per object: alle velden plus de relaties in beide
@@ -67,12 +78,21 @@ stap 4 met de `Sessie`-entiteit.
   objecten. Red-flag-relaties met `actietype = acuut_verwijzen` zijn visueel
   gemarkeerd.
 
+## Authenticatie + Mijn sessies (stap 4)
+
+- **`src/auth/`**: `AuthProvider`/`useAuth` (haalt `/api/auth/me` op bij
+  laden), `AuthScreen.tsx` (login/registratie-formulier, toont er één
+  tegelijk). De hele `AppShell` rendert pas na een geldige sessie.
+- **`src/sessies/SessiesOverzicht.tsx`**: lijst van eigen, nog niet-verlopen
+  sessies (§5.1) + detailweergave met samenvatting, alle stappen, en een
+  exporteerknop — requirements §27 ("terugkijken op een eerder consult").
+
 ## Structuur
 
 ```
-src/api.ts                       Fetch-helpers naar de API
+src/api.ts                       Fetch-helpers naar de Modus B-API
 src/types.ts                     Types die de Modus B-API-responses spiegelen
-src/App.tsx                      Shell met modus-tabs (A/B)
+src/App.tsx                      Shell: auth-gate + modus-tabs (A/B/Sessies)
 src/components/KennisbankModus.tsx    Modus B: zoeken/filteren/detail
 src/components/SearchFilters.tsx Zoekbalk, rol-wisselknop, type-/tier-filters
 src/components/ResultsList.tsx   Resultatenlijst
@@ -80,7 +100,13 @@ src/components/ObjectDetailPanel.tsx  Detailweergave inclusief relaties
 src/flow/types.ts                Types voor de flow-databundel + flow-state
 src/flow/reducer.ts              De reasoning-flow-stapmachine
 src/flow/logic.ts                Kleine pure helpers (hypothesen, redeneerspoor)
-src/flow/ReasoningFlow.tsx       Modus A: rendert elke stap
+src/flow/ReasoningFlow.tsx       Modus A: rendert elke stap + sessie-sync-effects
 src/flow/HypothesePanel.tsx      Doorlopend zichtbare hypothesenlijst + redeneerspoor
 src/flow/RedFlagModal.tsx        De blokkerende rode-vlag-interrupt
+src/flow/SamenvattingPaneel.tsx  Live/geëxporteerde sessie-samenvatting + kopiëren/printen
+src/auth/AuthContext.tsx         AuthProvider/useAuth
+src/auth/AuthScreen.tsx          Login-/registratieformulier
+src/auth/api.ts                  Fetch-helpers naar /api/auth/*
+src/sessies/SessiesOverzicht.tsx "Mijn sessies": lijst + detail + exporteren
+src/sessies/api.ts               Fetch-helpers naar /api/sessies/*
 ```

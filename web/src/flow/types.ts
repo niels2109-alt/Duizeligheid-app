@@ -115,8 +115,16 @@ export interface Interrupt {
   bevestigd: boolean;
 }
 
+/**
+ * stapType: de StapLog.stap_type-waarde (requirements §1.5) die deze
+ * trail-entry vertegenwoordigt, voor synchronisatie naar de sessie-opslag
+ * (stap 4). `null` voor entries die geen eigen StapLog-rij krijgen (bijv.
+ * "Rode vlag"-acknowledgement-entries — die voegen geen nieuwe klinische
+ * bevinding toe naast de anamnese-/test-entry die de rode vlag al triggerde).
+ */
 export interface ReasoningTrailEntry {
   stap: string;
+  stapType: "triage" | "anamnese" | "test" | "interpretatie" | "strategie" | "educatie" | "followup" | null;
   tekst: string;
   objectIds: string[];
   evidenceNiveau: string | null;
@@ -131,6 +139,12 @@ export interface FlowState {
   flow: FlowData | null;
   laden: boolean;
   fout: string | null;
+
+  /// Id van de gekoppelde Sessie (§1.5) — null totdat de omringende
+  /// component (ReasoningFlow.tsx) er een heeft aangemaakt. Persistentie
+  /// zelf (het daadwerkelijk wegschrijven) gebeurt buiten de reducer, in
+  /// een effect dat nieuwe trail-entries synchroniseert.
+  sessieId: string | null;
 
   stap: FlowStap;
   hypotheses: HypotheseState[];
@@ -155,6 +169,7 @@ export type FlowAction =
   | { type: "LADEN_START" }
   | { type: "LADEN_OK"; flow: FlowData }
   | { type: "LADEN_FOUT"; fout: string }
+  | { type: "SESSIE_GESTART"; sessieId: string }
   | { type: "KIES_TRIAGE"; id: string }
   | { type: "TRIGGER_INTERRUPT"; interrupt: Interrupt }
   | { type: "BEVESTIG_INTERRUPT" }
