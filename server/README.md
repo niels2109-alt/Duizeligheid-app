@@ -1,9 +1,8 @@
-# Duizeligheid — server (stap 1: datamodel + BPPV-content)
+# Duizeligheid — server (stap 1 + 2)
 
-Dit is **stap 1** uit `Duizeligheid-Technische-Requirements-MVP.md` §6.2:
-het datamodel (§1) opzetten en vullen met de volledige BPPV-content uit
-`Duizeligheid-Referentiemodel.md` §2-6. Er is nog geen interface en geen
-reasoning-flow — alleen een gevulde, controleerbare database.
+Bevat het datamodel + BPPV-content (**stap 1**) én de API voor Modus B,
+kennisbank raadplegen (**stap 2**), uit `Duizeligheid-Technische-Requirements-
+MVP.md` §6.2. Voor de bijbehorende zoek-/filterinterface, zie `../web`.
 
 ## Stack
 
@@ -81,3 +80,30 @@ Testbevindingen → interpretaties, interventie-indicaties, contra-indicatie-
 koppelingen, red-flag-triggers, de clinical-pearl-koppeling, en de zes
 differentiaaldiagnose-relaties — zie `prisma/seed.ts` voor de volledige
 inhoud per relatie.
+
+## API (stap 2 — Modus B: kennisbank raadplegen)
+
+Lichte Express-API bovenop dezelfde database, voor requirements §2.2: vrije
+zoek-/filterfunctie, filterbaar op `type_object` en `tier`, met afdwinging
+van `zichtbaar_therapeut`/`zichtbaar_patient` per rol. Puur read-only — geen
+koppeling aan een Sessie, geen logging.
+
+```bash
+npm run dev     # start de API op http://localhost:4000 (auto-reload)
+```
+
+Endpoints:
+
+| Endpoint | Omschrijving |
+|---|---|
+| `GET /api/meta` | Beschikbare `type_object`- en tier-waarden, voor de filter-UI |
+| `GET /api/objects?q=&type=&tier=&rol=` | Zoeken/filteren. `rol` = `therapeut` (default) of `patient`; `type` accepteert een komma-gescheiden lijst |
+| `GET /api/objects/:id?rol=` | Volledig detail van één object, inclusief relaties in beide richtingen. 404 als het object niet bestaat of niet zichtbaar is voor de opgegeven rol |
+| `GET /api/health` | Health check |
+
+**Over de `rol`-parameter**: er is in deze bouwstap nog geen echte
+authenticatie (die hoort bij stap 4, §5.2) — de rol komt hier voorlopig uit
+de request zelf (gezet door de rol-wisselknop in `../web`). De
+zichtbaarheidsregel zélf wordt al wel echt afgedwongen (zowel op het
+opgevraagde object als op elke relatie ernaartoe/vanuit), alleen de identiteit
+van de gebruiker nog niet geverifieerd. Zie `src/visibility.ts`.
