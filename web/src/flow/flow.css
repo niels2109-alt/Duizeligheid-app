@@ -179,6 +179,25 @@
   font-weight: 600;
 }
 
+/* --- Fase-selector (requirements §7.1) --- */
+.fase-selector {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.fase-selector h3 {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+}
+
+.fase-opties {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
 /* --- Testselectie --- */
 .test-list,
 .interventie-list {
@@ -254,6 +273,42 @@
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid var(--border);
+}
+
+/* --- Follow-up: twee onafhankelijke evaluatielussen (requirements §7.3) --- */
+.followup-lus {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.followup-lus h3 {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+}
+
+.followup-resultaat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 12px 0;
+}
+
+.followup-resultaat-grid h3 {
+  margin: 0 0 4px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.followup-resultaat-grid p {
+  margin: 0;
+  font-weight: 600;
+}
+
+@media (max-width: 600px) {
+  .followup-resultaat-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .ci-check h3 {

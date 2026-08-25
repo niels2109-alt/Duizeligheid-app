@@ -17,6 +17,8 @@ const DIAGN_ORDE: Record<string, number> = { hoog: 3, matig: 2, laag: 1 };
 const DEAD_END_VEILIGHEIDSHINT: Record<string, string> = {
   "STUB-CVA-TIA": "RF-001",
   "STUB-ORTHOSTASE": "RF-004",
+  "STUB-LABYRINTITIS": "RF-009",
+  "STUB-ACUSTICUSNEURINOOM": "RF-003",
 };
 
 export function ReasoningFlow() {
@@ -52,9 +54,22 @@ export function ReasoningFlow() {
   }, [state.trail.length, state.sessieId]);
 
   // Nieuwe trail-entries (met een stapType) synchroniseren als StapLog.
+  // gesyncTotRef en vorigeSessieIdRef zitten bewust in dezelfde effect (niet
+  // twee losse effects op state.sessieId): de sessieId-transitie kan in
+  // dezelfde render al een niet-lege trail hebben (bijv. de eerste triage-/
+  // follow-up-entry die de sessie-start zelf triggerde) — met twee losse
+  // effects zou de "teller resetten"-effect ná de sync-effect draaien en zo
+  // een net gesynchroniseerde teller weer op 0 zetten, wat bij de eerstvolgende
+  // trail-wijziging tot een dubbel gesynchroniseerde (dubbele) eerste regel
+  // in de sessie-samenvatting leidt.
   const gesyncTotRef = useRef(0);
+  const vorigeSessieIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!state.sessieId) return;
+    if (vorigeSessieIdRef.current !== state.sessieId) {
+      vorigeSessieIdRef.current = state.sessieId;
+      gesyncTotRef.current = 0;
+    }
     const nieuw = state.trail.slice(gesyncTotRef.current);
     if (nieuw.length === 0) return;
     gesyncTotRef.current = state.trail.length;
@@ -70,10 +85,6 @@ export function ReasoningFlow() {
         });
       });
   }, [state.sessieId, state.trail]);
-  // Teller resetten bij een nieuwe sessie (vervolgconsult/nieuwe triage).
-  useEffect(() => {
-    gesyncTotRef.current = 0;
-  }, [state.sessieId]);
 
   // aandoening_id koppelen zodra de flow convergeert op een bevestigd
   // subtype (§1.5: "Pas gezet zodra de flow convergeert").
@@ -99,17 +110,37 @@ export function ReasoningFlow() {
     [gekozenTest, state.gekozenBevindingRelatieId]
   );
 
+  // Requirements §7.1: fase (anamnese/observatie-bepaald) en lateraliteit
+  // (test-bepaald) zijn twee onafhankelijke assen — samen de "bevestigde"
+  // kwalificatie waarop interventies worden gematcht. Generiek over
+  // willekeurige kwalificatie-sleutels (niet hardcoded op subtype/variant of
+  // fase/lateraliteit), zodat dit ongewijzigd voor elk toekomstig item werkt.
+  const bevestigdeAssen: Record<string, string> = useMemo(
+    () => ({
+      ...(state.bevestigdeKwalificatie ?? {}),
+      ...(state.gekozenFase ? { fase: state.gekozenFase } : {}),
+    }),
+    [state.bevestigdeKwalificatie, state.gekozenFase]
+  );
+
+  // Heeft dit item een fase-as? Afgeleid uit de data zelf (niet hardcoded op
+  // een item-id) — waar is momenteel alleen voor AAND-002, maar dit blijft
+  // correct voor elk toekomstig item met dezelfde datavorm.
+  const heeftFaseAs = useMemo(
+    () => state.flow?.interventies.some((i) => i.indicatieKwalificaties.some((k) => k && "fase" in k)) ?? false,
+    [state.flow]
+  );
+
   const passendeInterventies: FlowInterventie[] = useMemo(() => {
-    if (!state.flow || !state.bevestigdeKwalificatie) return [];
-    const subtype = state.bevestigdeKwalificatie.subtype;
-    const variant = state.bevestigdeKwalificatie.variant;
-    return state.flow.interventies.filter((i) => {
-      const k = i.indicatieKwalificatie;
-      if (!k || k.subtype !== subtype) return false;
-      if (k.variant && variant && k.variant !== variant) return false;
-      return true;
-    });
-  }, [state.flow, state.bevestigdeKwalificatie]);
+    if (!state.flow || Object.keys(bevestigdeAssen).length === 0) return [];
+    return state.flow.interventies.filter((i) =>
+      i.indicatieKwalificaties.some(
+        (k) =>
+          k !== null &&
+          Object.entries(k).every(([sleutel, waarde]) => !bevestigdeAssen[sleutel] || bevestigdeAssen[sleutel] === waarde)
+      )
+    );
+  }, [state.flow, bevestigdeAssen]);
 
   const gekozenInterventie = state.flow?.interventies.find((i) => i.id === state.gekozenInterventieId);
 
@@ -118,6 +149,24 @@ export function ReasoningFlow() {
   if (!state.flow) return null;
 
   const flow = state.flow;
+
+  // Requirements §7.4 stap 3: kiezen van de HUIDIGE bundel of een niet-
+  // volledig-uitgewerkte (dead-end) differentiaal blijft synchroon
+  // (KIES_TRIAGE). Wisselen naar een ANDER, zelf ook volledig item vereist
+  // een nieuwe bundel op te halen.
+  async function kiesTriage(id: string, volledigUitgewerkt: boolean) {
+    if (id === flow.aandoening.id || !volledigUitgewerkt) {
+      dispatch({ type: "KIES_TRIAGE", id });
+      return;
+    }
+    dispatch({ type: "TRIAGE_WISSEL_START" });
+    try {
+      const nieuweFlow = await fetchFlowData(id);
+      dispatch({ type: "TRIAGE_WISSEL_OK", flow: nieuweFlow });
+    } catch (e) {
+      dispatch({ type: "TRIAGE_WISSEL_FOUT", fout: String(e) });
+    }
+  }
 
   const alleContraIndicatiesBeantwoord =
     gekozenInterventie != null &&
@@ -158,14 +207,22 @@ export function ReasoningFlow() {
                 gedwongen gekozen (referentiedocument §22 stap 1).
               </p>
               <div className="triage-opties">
-                <button type="button" className="triage-card" onClick={() => dispatch({ type: "KIES_TRIAGE", id: flow.aandoening.id })}>
+                <button type="button" className="triage-card" onClick={() => kiesTriage(flow.aandoening.id, true)}>
                   <strong>{flow.aandoening.klinischeKenmerken?.split(".")[0]}.</strong>
                   <span className="hint">→ past bij {flow.aandoening.naam}</span>
                 </button>
                 {flow.differentialen.map((d) => (
-                  <button type="button" key={d.id} className="triage-card" onClick={() => dispatch({ type: "KIES_TRIAGE", id: d.id })}>
+                  <button
+                    type="button"
+                    key={d.id}
+                    className="triage-card"
+                    onClick={() => kiesTriage(d.id, d.volledigUitgewerkt)}
+                  >
                     <strong>{d.kenmerk}</strong>
-                    <span className="hint">→ past bij {d.naam}</span>
+                    <span className="hint">
+                      → past bij {d.naam}
+                      {d.volledigUitgewerkt && d.id !== flow.aandoening.id ? " (volledig uitgewerkt)" : ""}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -206,7 +263,7 @@ export function ReasoningFlow() {
             <section className="flow-step">
               <p className="eyebrow">Traject beëindigd</p>
               <h2>Patiënt verwezen</h2>
-              <p>Het BPPV-traject is beëindigd op basis van de bevestigde rode vlag hierboven.</p>
+              <p>Het {flow.aandoening.naam}-traject is beëindigd op basis van de bevestigde rode vlag hierboven.</p>
               {state.sessieId && <SamenvattingPaneel sessieId={state.sessieId} />}
               <button type="button" className="btn-primary" onClick={() => dispatch({ type: "RESET" })}>
                 Nieuwe triage starten
@@ -243,6 +300,35 @@ export function ReasoningFlow() {
                   </li>
                 ))}
               </ul>
+
+              {heeftFaseAs && (
+                <div className="fase-selector">
+                  <h3>Fase vaststellen</h3>
+                  <p className="hint">
+                    Fase is een tijdgebonden state, geen vast kenmerk — wordt via samengestelde
+                    anamnese/observatie bepaald (geen aparte test) en moet bij elk consult opnieuw
+                    worden vastgesteld, nooit automatisch overgenomen uit een eerdere sessie
+                    (requirements §7.1).
+                  </p>
+                  <div className="fase-opties">
+                    {[
+                      { waarde: "acuut", label: "Acuut" },
+                      { waarde: "chronisch-compensatie", label: "Chronisch/compensatie" },
+                      { waarde: "geen-duidelijke-acute-fase", label: "Geen duidelijke acute fase" },
+                    ].map((optie) => (
+                      <button
+                        type="button"
+                        key={optie.waarde}
+                        className={state.gekozenFase === optie.waarde ? "chip-toggle active" : "chip-toggle"}
+                        onClick={() => dispatch({ type: "KIES_FASE", fase: optie.waarde })}
+                      >
+                        {optie.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <button type="button" className="btn-primary" onClick={() => dispatch({ type: "GA_NAAR_TESTSELECTIE" })}>
                 Naar testselectie
               </button>
@@ -313,9 +399,27 @@ export function ReasoningFlow() {
                   <span className="badge mono">{gekozenBevinding.naarObjectId}</span>
                   <span className="badge evidence">{fmtLabel(gekozenBevinding.evidenceNiveau)}</span>
                 </div>
+                {/* Requirements §7.1: beide assen (fase + lateraliteit) tegelijk
+                    tonen, niet na elkaar — één rij, ongeacht hoeveel assen dit
+                    item heeft. */}
+                {Object.keys(bevestigdeAssen).length > 0 && (
+                  <div className="meta-row">
+                    {Object.entries(bevestigdeAssen).map(([sleutel, waarde]) => (
+                      <span key={sleutel} className="badge">
+                        {sleutel}: {waarde}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
+              {heeftFaseAs && !state.gekozenFase && (
+                <p className="veiligheidshint">
+                  Fase nog niet vastgesteld — ga terug naar de anamnese-stap om de fase te bepalen
+                  vóór de behandelstrategie (requirements §7.1).
+                </p>
+              )}
               <div className="flow-actions">
-                {state.bevestigdeKwalificatie && (
+                {state.bevestigdeKwalificatie && (!heeftFaseAs || state.gekozenFase) && (
                   <button type="button" className="btn-primary" onClick={() => dispatch({ type: "GA_NAAR_BEHANDELSTRATEGIE" })}>
                     Naar behandelstrategie
                   </button>
@@ -478,7 +582,112 @@ export function ReasoningFlow() {
           )}
 
           {/* ---------------- STAP: followup-uitkomst ---------------- */}
-          {state.stap === "followup-uitkomst" && (
+          {state.stap === "followup-uitkomst" && heeftFaseAs && (
+            <section className="flow-step">
+              <p className="eyebrow">Stap 7 · Follow-up-consult</p>
+              {state.followup.faseVoortgang === null || state.followup.interventieEffect === null ? (
+                <>
+                  <h2>Twee onafhankelijke evaluatielussen</h2>
+                  <p className="hint">
+                    Vorige interventie:{" "}
+                    <strong>{flow.interventies.find((i) => i.id === state.followup.vorigeInterventieId)?.naam}</strong>.{" "}
+                    Deze twee lussen kunnen los van elkaar afwijken (requirements §7.3) — allebei apart
+                    beantwoorden.
+                  </p>
+
+                  <div className="followup-lus">
+                    <h3>Lus 1 · Fase-voortgang</h3>
+                    <p className="hint">Is de patiënt toe aan intensievere training?</p>
+                    <div className="triage-opties">
+                      <button
+                        type="button"
+                        className="triage-card"
+                        onClick={() => dispatch({ type: "FOLLOWUP_FASE_VOORTGANG", waarde: "verwacht" })}
+                      >
+                        Ja — toe aan volgende fase
+                      </button>
+                      <button
+                        type="button"
+                        className="triage-card"
+                        onClick={() => dispatch({ type: "FOLLOWUP_FASE_VOORTGANG", waarde: "nog-niet" })}
+                      >
+                        Nog niet — huidige fase voortzetten
+                      </button>
+                      <button
+                        type="button"
+                        className="triage-card"
+                        onClick={() => dispatch({ type: "FOLLOWUP_FASE_VOORTGANG", waarde: "afwijkend" })}
+                      >
+                        Afwijkend — verslechtering of nieuwe neurologische symptomen
+                      </button>
+                    </div>
+                    {state.followup.faseVoortgang && (
+                      <p className="hint">
+                        Beantwoord: <strong>{fmtLabel(state.followup.faseVoortgang)}</strong>
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="followup-lus">
+                    <h3>Lus 2 · Interventie-effectiviteit</h3>
+                    <p className="hint">Slaat de interventie aan (bijv. DVA-hermeting)?</p>
+                    <div className="triage-opties">
+                      <button
+                        type="button"
+                        className="triage-card"
+                        onClick={() => dispatch({ type: "FOLLOWUP_INTERVENTIE_EFFECT", waarde: "effectief" })}
+                      >
+                        Effectief — merkbare verbetering
+                      </button>
+                      <button
+                        type="button"
+                        className="triage-card"
+                        onClick={() => dispatch({ type: "FOLLOWUP_INTERVENTIE_EFFECT", waarde: "onvoldoende" })}
+                      >
+                        Onvoldoende effect
+                      </button>
+                    </div>
+                    {state.followup.interventieEffect && (
+                      <p className="hint">
+                        Beantwoord: <strong>{fmtLabel(state.followup.interventieEffect)}</strong>
+                      </p>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h2>Resultaat — twee lussen</h2>
+                  <div className="followup-resultaat-grid">
+                    <div>
+                      <h3>Fase-voortgang</h3>
+                      <p>{fmtLabel(state.followup.faseVoortgang)}</p>
+                    </div>
+                    <div>
+                      <h3>Interventie-effectiviteit</h3>
+                      <p>{fmtLabel(state.followup.interventieEffect)}</p>
+                    </div>
+                  </div>
+                  {state.followup.faseVoortgang === "verwacht" && state.followup.interventieEffect === "onvoldoende" && (
+                    <p className="veiligheidshint">
+                      Correcte fase-overgang mét onvoldoende interventie-effect kan wijzen op een gemiste
+                      bilaterale component of een therapietrouw-probleem — niet op een fase-fout (§7.3).
+                    </p>
+                  )}
+                  {state.followup.faseVoortgang === "afwijkend" && (
+                    <p className="veiligheidshint">
+                      Wijkt af van verwacht beloop — heroverweeg de hypothese (RF-008).
+                    </p>
+                  )}
+                  {state.sessieId && <SamenvattingPaneel sessieId={state.sessieId} />}
+                  <button type="button" className="btn-primary" onClick={() => dispatch({ type: "RESET" })}>
+                    Nieuwe triage starten
+                  </button>
+                </>
+              )}
+            </section>
+          )}
+
+          {state.stap === "followup-uitkomst" && !heeftFaseAs && (
             <section className="flow-step">
               <p className="eyebrow">Stap 7 · Follow-up-consult</p>
               {state.followup.uitkomst === null ? (

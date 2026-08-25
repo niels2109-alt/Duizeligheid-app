@@ -1,11 +1,17 @@
 /**
  * Seed-script — vult de database met de volledige BPPV-content uit
  * Duizeligheid-Referentiemodel.md §2-6, conform Duizeligheid-Technische-
- * Requirements-MVP.md §6.2 stap 1.
+ * Requirements-MVP.md §6.2 stap 1. Uitgebreid (requirements §7, §7.4 stap 1)
+ * met het volledige tweede item — vestibulaire hypofunctie — uit
+ * referentiedocument §14.
  *
  * Objecten: AAND-001 (BPPV), TEST-001/002, INT-001 t/m 004, RF-001 t/m 006,
  * EDU-001, PEARL-001, plus CI-001 t/m 005 (contra-indicaties) en zes
- * differentiaaldiagnose-stubs.
+ * differentiaaldiagnose-stubs — AAND-002 (Vestibulaire hypofunctie),
+ * TEST-003/004, INT-005 t/m 007, CI-006, RF-007 t/m 009, EDU-002, plus
+ * twee nieuwe gedeelde Tier 3-stubs (labyrintitis, acusticusneurinoom) en
+ * een gereserveerde AAND-004-stub (multifactoriële duizeligheid met
+ * valrisico, §19 — expliciet nog niet uitgewerkt, zie requirements §7.2).
  *
  * ---------------------------------------------------------------------
  * MODELLERINGSBESLISSINGEN (afgestemd met opdrachtgever vóór het bouwen)
@@ -63,6 +69,7 @@ import {
   DiagnostischeWaarde,
   RelatietypeDifferentiaal,
   ActieType,
+  PatroonType,
 } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -417,23 +424,232 @@ async function main() {
     },
   });
 
-  // -------------------------------------------------------------------
-  // Differentiaaldiagnose-stubs (referentiedocument §6, relatietype §18)
-  // -------------------------------------------------------------------
+  // =====================================================================
+  // AAND-002 — Vestibulaire hypofunctie, volledig item
+  // (referentiedocument §14, requirements §7 — aanvulling tweede item)
+  // =====================================================================
   await prisma.knowledgeObject.create({
     data: {
-      // Reserveert bewust de id die het referentiedocument (§14) al voor de
-      // toekomstige volledige uitwerking van dit item gebruikt.
       id: "AAND-002",
-      naam: "Vestibulaire hypofunctie/neuritis (stub)",
+      naam: "Vestibulaire hypofunctie",
       typeObject: TypeObject.aandoening,
       behandelverantwoordelijkheid: Behandelverantwoordelijkheid.zelfstandig_fysio,
       behandeldiepte: Behandeldiepte.volledig,
       tier: 1,
+      // §7.2: enkelvoudig, net als BPPV — geen samengesteld-uitkomst-logica
+      // nodig voor dit item (dat volgt pas bij het vierde item, AAND-004).
+      uitkomsttype: Uitkomsttype.enkelvoudig,
       kernbeschrijving:
-        "STUB — onderscheidend t.o.v. BPPV: continue duizeligheid, niet " +
-        "houdingsgebonden aanvallen. Volledige uitwerking volgt in een " +
-        "latere bouwfase (referentiedocument §14, roadmap §25 punt 3).",
+        "Verminderde/uitgevallen functie van het vestibulair orgaan/nervus " +
+        "vestibularis, uni- of bilateraal. Meest voorkomende oorzaak: " +
+        "neuritis vestibularis; ook chirurgie, ototoxiciteit, onbekend.",
+      klinischeKenmerken:
+        "Continue duizeligheid/onbalans (niet aanvalsgewijs, niet " +
+        "houdingsafhankelijk — belangrijkste onderscheid met BPPV). " +
+        "Unilateraal: acuut vaak hevige rotatoire vertigo + " +
+        "misselijkheid/braken, later vaag onbalansgevoel. Bilateraal: geen " +
+        "vertigo-aanval, wel chronische onbalans + oscillopsie.",
+      evidenceNiveau: EvidenceNiveau.richtlijn,
+      status: ObjectStatus.gepubliceerd,
+      laatstGecontroleerdOp: INGEVOERD_OP,
+      zichtbaarTherapeut: true,
+      zichtbaarPatient: true,
+    },
+  });
+
+  // --- TEST-003/004 (referentiedocument §14) --------------------------
+  await prisma.knowledgeObject.create({
+    data: {
+      id: "TEST-003",
+      naam: "Head Impulse Test (HIT)",
+      typeObject: TypeObject.onderzoekstest,
+      kernbeschrijving:
+        "Kern voor lateraliteitsbepaling bij vestibulaire hypofunctie. " +
+        "LET OP — omgekeerde logica t.o.v. BPPV (requirements §7.1/7.5): bij " +
+        "acute heftige vertigo is een normale testuitslag hier juist het " +
+        "alarmerende signaal (verdacht centraal), niet een afwijkende. Zie " +
+        "de relatie naar RF-007 voor de exacte, expliciet vastgelegde " +
+        "interpretatie — nooit een generieke \"afwijkend = alarm\"-aanname.",
+      evidenceNiveau: EvidenceNiveau.systematic_review,
+      status: ObjectStatus.gepubliceerd,
+      laatstGecontroleerdOp: INGEVOERD_OP,
+      zichtbaarTherapeut: true,
+      zichtbaarPatient: true,
+    },
+  });
+  await prisma.knowledgeObject.create({
+    data: {
+      id: "TEST-004",
+      naam: "Dynamic Visual Acuity Test (DVA)",
+      typeObject: TypeObject.onderzoekstest,
+      kernbeschrijving:
+        "Met name relevant bij bilaterale hypofunctie en " +
+        "oscillopsie-klachten; ook gebruikt als hermeting om " +
+        "interventie-effectiviteit van adaptatie/gaze-stability-training " +
+        "(INT-006) te evalueren (§7.3-follow-up-lus 'interventie-" +
+        "effectiviteit').",
+      evidenceNiveau: EvidenceNiveau.systematic_review,
+      status: ObjectStatus.gepubliceerd,
+      laatstGecontroleerdOp: INGEVOERD_OP,
+      zichtbaarTherapeut: true,
+      zichtbaarPatient: true,
+    },
+  });
+
+  // --- INT-005 t/m 007 (referentiedocument §14) ------------------------
+  // Evidence-niveau: per interventie niet los vermeld in het brondocument
+  // (alleen op AAND-002-niveau: "richtlijn, vestibulaire revalidatie sterk
+  // onderbouwd") — hier daarom richtlijn voor alle drie aangehouden, i.p.v.
+  // een niet-onderbouwd onderscheid tussen de drie te verzinnen.
+  await prisma.knowledgeObject.create({
+    data: {
+      id: "INT-005",
+      naam: "Habituatie",
+      typeObject: TypeObject.interventie,
+      kernbeschrijving:
+        "Gewenningsoefeningen bij chronische, met name unilaterale " +
+        "vestibulaire hypofunctie. Niet starten in de acute fase met sterke " +
+        "autonome symptomen (zie contra-indicatie CI-006).",
+      evidenceNiveau: EvidenceNiveau.richtlijn,
+      status: ObjectStatus.gepubliceerd,
+      laatstGecontroleerdOp: INGEVOERD_OP,
+      zichtbaarTherapeut: true,
+      zichtbaarPatient: true,
+    },
+  });
+  await prisma.knowledgeObject.create({
+    data: {
+      id: "INT-006",
+      naam: "Adaptatie/gaze stability",
+      typeObject: TypeObject.interventie,
+      kernbeschrijving:
+        "Oefeningen gericht op vestibulo-oculaire aanpassing, bij zowel " +
+        "uni- als bilaterale hypofunctie — essentieel bij bilaterale " +
+        "hypofunctie. Lichte opbouw kan al starten richting het einde van " +
+        "de acute fase, dus eerder dan Habituatie/Substitutie.",
+      evidenceNiveau: EvidenceNiveau.richtlijn,
+      status: ObjectStatus.gepubliceerd,
+      laatstGecontroleerdOp: INGEVOERD_OP,
+      zichtbaarTherapeut: true,
+      zichtbaarPatient: true,
+    },
+  });
+  await prisma.knowledgeObject.create({
+    data: {
+      id: "INT-007",
+      naam: "Substitutie",
+      typeObject: TypeObject.interventie,
+      kernbeschrijving:
+        "Compensatiestrategieën, met name bij chronische bilaterale " +
+        "hypofunctie waar geen gezonde kant beschikbaar is om op te " +
+        "compenseren. Inhoudelijk raakvlak met het toekomstige " +
+        "multifactoriële-duizeligheid-met-valrisico-item (AAND-004).",
+      evidenceNiveau: EvidenceNiveau.richtlijn,
+      status: ObjectStatus.gepubliceerd,
+      laatstGecontroleerdOp: INGEVOERD_OP,
+      zichtbaarTherapeut: true,
+      zichtbaarPatient: true,
+    },
+  });
+
+  // --- CI-006 (referentiedocument §14, alleen bij INT-005) -------------
+  await prisma.knowledgeObject.create({
+    data: {
+      id: "CI-006",
+      naam: "Acute fase met sterke autonome symptomen",
+      typeObject: TypeObject.contra_indicatie,
+      kernbeschrijving:
+        "Contra-indicatie voor het starten van habituatie-oefeningen bij " +
+        "vestibulaire hypofunctie in de acute fase met sterke autonome " +
+        "symptomen (misselijkheid/braken).",
+      evidenceNiveau: EvidenceNiveau.expert_opinion,
+      status: ObjectStatus.gepubliceerd,
+      laatstGecontroleerdOp: INGEVOERD_OP,
+      zichtbaarTherapeut: true,
+      zichtbaarPatient: false,
+    },
+  });
+
+  // --- RF-007 t/m 009 (referentiedocument §14) --------------------------
+  // RF-007: TEST-003's omgekeerde-logica-red-flag — bewust GEEN generieke
+  // AAND-002 → RF-007-anamneserelatie (net als RF-002 bij BPPV): dit signaal
+  // hoort uitsluitend bij de TEST-003-relatie hieronder, niet los ervan.
+  await prisma.knowledgeObject.create({
+    data: {
+      id: "RF-007",
+      naam: "Normale HIT bij acute heftige vertigo",
+      typeObject: TypeObject.red_flag,
+      kernbeschrijving:
+        "Normale HIT bij acute heftige vertigo → Verdacht centraal (bijv. " +
+        "cerebellair infarct).",
+      evidenceNiveau: EvidenceNiveau.richtlijn,
+      status: ObjectStatus.gepubliceerd,
+      laatstGecontroleerdOp: INGEVOERD_OP,
+      zichtbaarTherapeut: true,
+      zichtbaarPatient: true,
+    },
+  });
+  const vestibulaireRedFlags = [
+    {
+      id: "RF-008",
+      naam: "Geen verwachte fase-voortgang, verslechtering of nieuwe neurologische symptomen",
+      kenmerken: "Geen verwachte fase-voortgang, verslechtering, nieuwe neurologische symptomen",
+      interpretatie: "Wijkt af van verwacht beloop",
+      actietype: ActieType.hypothese_heroverwegen,
+    },
+    {
+      id: "RF-009",
+      naam: "Asymmetrisch gehoorverlies/tinnitus bij het beeld",
+      kenmerken: "Asymmetrisch gehoorverlies/tinnitus bij het beeld",
+      // Brondocument geeft hier "Hypothese-heroverwegen / kan escaleren" —
+      // het datamodel kent geen los "kan escaleren"-niveau naast de drie
+      // vaste actietypes; hier op het letterlijk eerstgenoemde
+      // hypothese_heroverwegen gezet en dit verschil expliciet benoemd
+      // i.p.v. stilzwijgend een van de twee te kiezen.
+      interpretatie:
+        "Neuritis vestibularis geeft normaliter geen gehoorverlies — kan " +
+        "wijzen op labyrintitis of een andere oorzaak (kan escaleren, zie " +
+        "toelichting bij dit object)",
+      actietype: ActieType.hypothese_heroverwegen,
+    },
+  ];
+  for (const rf of vestibulaireRedFlags) {
+    await prisma.knowledgeObject.create({
+      data: {
+        id: rf.id,
+        naam: rf.naam,
+        typeObject: TypeObject.red_flag,
+        kernbeschrijving: `${rf.kenmerken} → ${rf.interpretatie}.`,
+        evidenceNiveau: EvidenceNiveau.richtlijn,
+        status: ObjectStatus.gepubliceerd,
+        laatstGecontroleerdOp: INGEVOERD_OP,
+        zichtbaarTherapeut: true,
+        zichtbaarPatient: true,
+      },
+    });
+  }
+
+  // --- EDU-002 (referentiedocument §14) ---------------------------------
+  // Zelfde aanpak als EDU-001: structurele inhoudsbeschrijving vastgelegd
+  // i.p.v. afgeronde marketing-/voorlichtingscopy (§12-principe, geen
+  // klinische patiëntcontent verzinnen die niet in de kennisbank staat).
+  // Alleen RF-007 (acuut_verwijzen) in signaleringObjectIds — RF-008/009
+  // zijn hypothese_heroverwegen-signalen voor de therapeut, geen
+  // patiëntgerichte alarmsignalen, analoog aan hoe RF-006 buiten EDU-001
+  // is gehouden. (RF-004 buiten EDU-001 laten was een eerdere, niet aan mij
+  // toegelichte keuze uit stap 1 — hier dus niet als precedent gebruikt.)
+  await prisma.knowledgeObject.create({
+    data: {
+      id: "EDU-002",
+      naam: "Patiënteducatie vestibulaire hypofunctie",
+      typeObject: TypeObject.patienteducatie_item,
+      kernbeschrijving:
+        "Patiëntgerichte uitleg over vestibulaire hypofunctie: wat het is, " +
+        "geruststelling over het herstelvermogen van het evenwichtssysteem " +
+        "(centrale compensatie), wat de revalidatie-oefeningen inhouden, " +
+        "zelfmanagement, en alarmsignalen in lekentaal. Bevat bewust geen " +
+        "fase/lateraliteit-detail, testinterpretatie of contra-indicaties " +
+        "in klinische taal.",
       evidenceNiveau: EvidenceNiveau.richtlijn,
       status: ObjectStatus.concept,
       laatstGecontroleerdOp: INGEVOERD_OP,
@@ -441,7 +657,25 @@ async function main() {
       zichtbaarPatient: true,
     },
   });
+  await prisma.patientEducatieObject.create({
+    data: {
+      id: "EDU-002-PEO",
+      knowledgeObjectId: "EDU-002",
+      verwachtingsmanagement:
+        "Vestibulaire hypofunctie vraagt om een langduriger traject dan " +
+        "BPPV: revalidatie-oefeningen (adaptatie/gaze-stability, eventueel " +
+        "habituatie of substitutie) kunnen weken tot maanden duren. Een " +
+        "tijdelijke verergering van de klachten tijdens de oefeningen is " +
+        "normaal en geen reden om te stoppen.",
+      samengesteld: false,
+      bronObjectIds: j(["AAND-002"]),
+      signaleringObjectIds: j(["RF-007"]),
+    },
+  });
 
+  // -------------------------------------------------------------------
+  // Differentiaaldiagnose-stubs (referentiedocument §6, relatietype §18)
+  // -------------------------------------------------------------------
   await prisma.knowledgeObject.create({
     data: {
       // Reserveert bewust de id die het referentiedocument (§15) al voor de
@@ -485,6 +719,33 @@ async function main() {
     },
   });
 
+  await prisma.knowledgeObject.create({
+    data: {
+      // Reserveert bewust de id die het referentiedocument (§19) al voor de
+      // toekomstige volledige uitwerking van dit item gebruikt.
+      id: "AAND-004",
+      naam: "Multifactoriële duizeligheid met valrisico (stub)",
+      typeObject: TypeObject.aandoening,
+      behandelverantwoordelijkheid: Behandelverantwoordelijkheid.zelfstandig_fysio,
+      behandeldiepte: Behandeldiepte.volledig,
+      tier: 1,
+      kernbeschrijving:
+        "STUB — vierde hoofditem uit het referentiedocument (§19). " +
+        "Samengesteld-uitkomsttype (meerdere onafhankelijke factoren, o.a. " +
+        "valrisico/orthostase), vereist de samengesteld-uitkomst-reasoning-" +
+        "flow-logica die pas bij de bouw van dit item zelf wordt " +
+        "toegevoegd — expliciet buiten scope van requirements §7.2 voor de " +
+        "huidige bouwstap. Evidence-niveau hier een voorzichtige " +
+        "placeholder, niet uit het brondocument overgenomen (net als bij " +
+        "STUB-VEST-MIGRAINE).",
+      evidenceNiveau: EvidenceNiveau.consensus,
+      status: ObjectStatus.concept,
+      laatstGecontroleerdOp: INGEVOERD_OP,
+      zichtbaarTherapeut: true,
+      zichtbaarPatient: true,
+    },
+  });
+
   const tier3Stubs = [
     {
       id: "STUB-MENIERE",
@@ -507,6 +768,25 @@ async function main() {
         "STUB — onderscheidend t.o.v. BPPV: uitgelokt door opstaan, " +
         "meetbare bloeddrukdaling. Ook relevant binnen het toekomstige " +
         "multifactoriële-duizeligheid-met-valrisico-item.",
+    },
+    // §14/§18 "gedeelde Tier 3-stub-bibliotheek": labyrintitis en
+    // acusticusneurinoom worden hier voor het eerst als los object
+    // aangemaakt (voorheen alleen genoemd binnen RF-003's interpretatietekst).
+    {
+      id: "STUB-LABYRINTITIS",
+      naam: "Labyrintitis (stub)",
+      kernbeschrijving:
+        "STUB — onderscheidend t.o.v. vestibulaire hypofunctie (neuritis " +
+        "vestibularis): bijkomend gehoorverlies/tinnitus (zie RF-009) — " +
+        "neuritis vestibularis geeft dat normaliter niet.",
+    },
+    {
+      id: "STUB-ACUSTICUSNEURINOOM",
+      naam: "Acusticusneurinoom (stub)",
+      kernbeschrijving:
+        "STUB — onderscheidend t.o.v. vestibulaire hypofunctie: " +
+        "geleidelijker beloop, vaak met progressief eenzijdig " +
+        "gehoorverlies (zie ook RF-003).",
     },
   ];
   for (const s of tier3Stubs) {
@@ -804,6 +1084,212 @@ async function main() {
       data: {
         id: nextRelatieId(),
         vanObjectId: "AAND-001",
+        naarObjectId: d.naar,
+        relatieType: RelatieType.differentiaal,
+        bevinding: d.kenmerk,
+        relatietypeDifferentiaal: d.type,
+      },
+    });
+  }
+
+  // =====================================================================
+  // RELATIES — AAND-002 (Vestibulaire hypofunctie), referentiedocument
+  // §14, requirements §7
+  // =====================================================================
+
+  // --- TEST-003 (HIT) → AAND-002 (lateraliteitsbepaling) ------------------
+  await prisma.relatie.create({
+    data: {
+      id: nextRelatieId(),
+      vanObjectId: "TEST-003",
+      naarObjectId: "AAND-002",
+      relatieType: RelatieType.bevinding_interpretatie,
+      kwalificatie: j({ lateraliteit: "unilateraal" }),
+      bevinding: "Afwijkende HIT (corrigerende saccade) eenzijdig",
+      interpretatie: "Unilaterale vestibulaire hypofunctie, aangedane zijde = kant van de saccade",
+      diagnostischeWaarde: DiagnostischeWaarde.hoog,
+      evidenceNiveau: EvidenceNiveau.systematic_review,
+    },
+  });
+  await prisma.relatie.create({
+    data: {
+      id: nextRelatieId(),
+      vanObjectId: "TEST-003",
+      naarObjectId: "AAND-002",
+      relatieType: RelatieType.bevinding_interpretatie,
+      kwalificatie: j({ lateraliteit: "bilateraal" }),
+      bevinding: "Afwijkende HIT (corrigerende saccade) beiderzijds",
+      interpretatie: "Bilaterale vestibulaire hypofunctie",
+      diagnostischeWaarde: DiagnostischeWaarde.hoog,
+      evidenceNiveau: EvidenceNiveau.systematic_review,
+    },
+  });
+  // --- TEST-003 → RF-007: DE OMGEKEERDE-LOGICA-RELATIE (§7.1/§7.5) --------
+  // Bewust GEEN generieke "afwijkend = alarm"-code: deze relatie legt zelf,
+  // rechtstreeks in bevinding/interpretatie, vast dat een NORMALE uitslag
+  // (niet een afwijkende) hier naar de red flag leidt. Er bestaat geen
+  // aparte "negatief/normaal = geruststellend"-relatie voor TEST-003 zoals
+  // die wel voor TEST-001/002 bestaat — juist die afwezigheid voorkomt dat
+  // een generieke aanname deze relatie zou kunnen overschrijven of
+  // tegenspreken. kwalificatie.fase="acuut" legt vast dat dit specifiek de
+  // context "acute heftige vertigo" betreft, niet elke HIT-afname.
+  await prisma.relatie.create({
+    data: {
+      id: nextRelatieId(),
+      vanObjectId: "TEST-003",
+      naarObjectId: "RF-007",
+      relatieType: RelatieType.bevinding_interpretatie,
+      kwalificatie: j({ fase: "acuut" }),
+      bevinding: "Normale HIT bij acute heftige vertigo",
+      interpretatie: "Verdacht centraal (bijv. cerebellair infarct) — zie RF-007",
+      actietype: ActieType.acuut_verwijzen,
+      evidenceNiveau: EvidenceNiveau.richtlijn,
+    },
+  });
+
+  // --- TEST-004 (DVA) → AAND-002 -------------------------------------------
+  await prisma.relatie.create({
+    data: {
+      id: nextRelatieId(),
+      vanObjectId: "TEST-004",
+      naarObjectId: "AAND-002",
+      relatieType: RelatieType.bevinding_interpretatie,
+      kwalificatie: j({ lateraliteit: "bilateraal" }),
+      bevinding: "Verminderde visuele acuiteit tijdens hoofdbeweging (≥2 regels verlies)",
+      interpretatie: "Bevestigt bilaterale vestibulaire hypofunctie, relevant bij oscillopsie-klachten",
+      diagnostischeWaarde: DiagnostischeWaarde.matig,
+      evidenceNiveau: EvidenceNiveau.systematic_review,
+    },
+  });
+
+  // --- AAND-002 → INT-005/006/007 (fase × lateraliteit) --------------------
+  await prisma.relatie.create({
+    data: {
+      id: nextRelatieId(),
+      vanObjectId: "AAND-002",
+      naarObjectId: "INT-005",
+      relatieType: RelatieType.bevinding_interpretatie,
+      kwalificatie: j({ fase: "chronisch-compensatie", lateraliteit: "unilateraal" }),
+      bevinding: "Chronische fase, unilaterale hypofunctie, geen sterke autonome symptomen meer op de voorgrond",
+      interpretatie: "Habituatie geïndiceerd",
+      evidenceNiveau: EvidenceNiveau.richtlijn,
+    },
+  });
+  await prisma.relatie.create({
+    data: {
+      id: nextRelatieId(),
+      vanObjectId: "AAND-002",
+      naarObjectId: "INT-006",
+      relatieType: RelatieType.bevinding_interpretatie,
+      kwalificatie: j({ fase: "acuut" }),
+      bevinding: "Late acute fase, lichte opbouw haalbaar",
+      interpretatie: "Adaptatie/gaze-stability-training kan al licht worden opgestart, ruim vóór de chronische fase",
+      evidenceNiveau: EvidenceNiveau.richtlijn,
+    },
+  });
+  await prisma.relatie.create({
+    data: {
+      id: nextRelatieId(),
+      vanObjectId: "AAND-002",
+      naarObjectId: "INT-006",
+      relatieType: RelatieType.bevinding_interpretatie,
+      kwalificatie: j({ fase: "chronisch-compensatie" }),
+      bevinding: "Chronische fase, uni- of bilaterale hypofunctie",
+      interpretatie: "Adaptatie/gaze-stability-training geïndiceerd — essentieel bij bilaterale hypofunctie",
+      evidenceNiveau: EvidenceNiveau.richtlijn,
+    },
+  });
+  await prisma.relatie.create({
+    data: {
+      id: nextRelatieId(),
+      vanObjectId: "AAND-002",
+      naarObjectId: "INT-007",
+      relatieType: RelatieType.bevinding_interpretatie,
+      kwalificatie: j({ fase: "chronisch-compensatie", lateraliteit: "bilateraal" }),
+      bevinding: "Chronische fase, bilaterale hypofunctie — geen gezonde kant om op te compenseren",
+      interpretatie: "Substitutie geïndiceerd",
+      evidenceNiveau: EvidenceNiveau.richtlijn,
+    },
+  });
+
+  // --- CI-006 → INT-005 (contra-indicatie-koppeling) -----------------------
+  await prisma.relatie.create({
+    data: {
+      id: nextRelatieId(),
+      vanObjectId: "CI-006",
+      naarObjectId: "INT-005",
+      relatieType: RelatieType.bevinding_interpretatie,
+      bevinding: "Patiënt heeft CI-006",
+      interpretatie: "Niet starten in de acute fase met sterke autonome symptomen",
+    },
+  });
+
+  // --- AAND-002 → RF-008/009 (anamnese/follow-up-red flags) ----------------
+  // RF-008: expliciet patroonType=afwijkend_beloop (§18: "patroon-type vast
+  // onderdeel van elke follow-up-relatie") — dit is de fase-voortgangslus
+  // uit §7.3. RF-009 is geen follow-up-lus maar een anamnese-consistentie-
+  // signaal, krijgt daarom bewust geen patroonType.
+  await prisma.relatie.create({
+    data: {
+      id: nextRelatieId(),
+      vanObjectId: "AAND-002",
+      naarObjectId: "RF-008",
+      relatieType: RelatieType.bevinding_interpretatie,
+      bevinding: "Geen verwachte fase-voortgang, verslechtering, nieuwe neurologische symptomen",
+      interpretatie: "Wijkt af van verwacht beloop",
+      actietype: ActieType.hypothese_heroverwegen,
+      patroonType: PatroonType.afwijkend_beloop,
+      evidenceNiveau: EvidenceNiveau.richtlijn,
+    },
+  });
+  await prisma.relatie.create({
+    data: {
+      id: nextRelatieId(),
+      vanObjectId: "AAND-002",
+      naarObjectId: "RF-009",
+      relatieType: RelatieType.bevinding_interpretatie,
+      bevinding: "Asymmetrisch gehoorverlies/tinnitus bij het beeld",
+      interpretatie: "Neuritis vestibularis geeft normaliter geen gehoorverlies — kan wijzen op labyrintitis of een andere oorzaak",
+      actietype: ActieType.hypothese_heroverwegen,
+      evidenceNiveau: EvidenceNiveau.richtlijn,
+    },
+  });
+
+  // --- AAND-002 → differentiaaldiagnose (referentiedocument §14) ----------
+  // BPPV staat er niet los bij: die differentiaal bestaat al (AAND-001 →
+  // AAND-002 hierboven) en is via "relaties naar dit object toe" al
+  // zichtbaar op AAND-002 zelf — geen dubbele relatie nodig.
+  const differentialenVestibulair: Array<{
+    naar: string;
+    kenmerk: string;
+    type: RelatietypeDifferentiaal;
+  }> = [
+    {
+      naar: "STUB-CVA-TIA",
+      kenmerk: "Acute presentatie met focale neurologische uitval (centraal vestibulair syndroom)",
+      type: RelatietypeDifferentiaal.uitsluitend,
+    },
+    {
+      naar: "STUB-LABYRINTITIS",
+      kenmerk: "Bijkomend gehoorverlies/tinnitus — neuritis vestibularis geeft dat normaliter niet",
+      type: RelatietypeDifferentiaal.uitsluitend,
+    },
+    {
+      naar: "STUB-ACUSTICUSNEURINOOM",
+      kenmerk: "Geleidelijker beloop, vaak progressief eenzijdig gehoorverlies",
+      type: RelatietypeDifferentiaal.uitsluitend,
+    },
+    {
+      naar: "AAND-004",
+      kenmerk: "Kan comorbide voorkomen, met name bij chronische/bilaterale hypofunctie bij oudere patiënten met valrisico",
+      type: RelatietypeDifferentiaal.comorbide,
+    },
+  ];
+  for (const d of differentialenVestibulair) {
+    await prisma.relatie.create({
+      data: {
+        id: nextRelatieId(),
+        vanObjectId: "AAND-002",
         naarObjectId: d.naar,
         relatieType: RelatieType.differentiaal,
         bevinding: d.kenmerk,

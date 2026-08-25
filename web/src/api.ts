@@ -31,8 +31,12 @@ export async function fetchObjectDetail(id: string, rol: Rol): Promise<ObjectDet
   return res.json();
 }
 
-export async function fetchFlowData(): Promise<FlowData> {
-  const res = await fetch("/api/flow/bppv");
+// aandoeningId: welke aandoening als hoofdhypothese van de bundel dient
+// (requirements §7.4 stap 3 — de route is gegeneraliseerd, niet meer
+// hardcoded op BPPV). Default AAND-001, want de flow start altijd bij BPPV's
+// triagevraag (referentiedocument §22 stap 1).
+export async function fetchFlowData(aandoeningId: string = "AAND-001"): Promise<FlowData> {
+  const res = await fetch(`/api/flow/${encodeURIComponent(aandoeningId)}`);
   if (!res.ok) throw new Error("Kon reasoning-flow-data niet ophalen.");
   return res.json();
 }

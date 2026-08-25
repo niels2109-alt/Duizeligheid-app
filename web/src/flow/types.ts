@@ -52,7 +52,11 @@ export interface FlowInterventie {
   naam: string;
   kernbeschrijving: string;
   evidenceNiveau: string;
-  indicatieKwalificatie: Record<string, string> | null;
+  // Meervoud (requirements §7.1): een interventie kan meerdere, los
+  // gekwalificeerde indicatie-relaties hebben (bijv. INT-006 bij zowel
+  // fase=acuut als fase=chronisch-compensatie) — bij BPPV is dit array
+  // altijd hooguit 1 element lang, dat gedrag is ongewijzigd.
+  indicatieKwalificaties: Array<Record<string, string> | null>;
   contraIndicaties: FlowContraIndicatie[];
 }
 
@@ -132,7 +136,15 @@ export interface ReasoningTrailEntry {
 
 export interface FollowupState {
   vorigeInterventieId: string | null;
+  /// BPPV — één evaluatielus (ongewijzigd).
   uitkomst: "succes" | "herhaling" | "kanaalconversie" | "falen" | null;
+  /// Items met een fase-as (bijv. vestibulaire hypofunctie, requirements
+  /// §7.3) — twee losse, onafhankelijke evaluatielussen i.p.v. het
+  /// enkelvoudige `uitkomst`-veld hierboven. Kunnen los van elkaar afwijken
+  /// (referentiedocument §14): bewust twee aparte velden, nooit samengevoegd
+  /// tot één goed/fout-oordeel.
+  faseVoortgang: "verwacht" | "nog-niet" | "afwijkend" | null;
+  interventieEffect: "effectief" | "onvoldoende" | null;
 }
 
 export interface FlowState {
@@ -157,6 +169,13 @@ export interface FlowState {
   gekozenBevindingRelatieId: string | null;
   bevestigdeKwalificatie: Record<string, string> | null;
 
+  /// Requirements §7.1: fase is een tijdgebonden state, wordt via
+  /// samengestelde anamnese/observatie bepaald (geen aparte test) en moet
+  /// bij elke sessie opnieuw worden vastgesteld — vandaar een los veld i.p.v.
+  /// afgeleid uit een testbevinding, en altijd null bij een nieuwe/RESET-te
+  /// flow (nooit automatisch overgenomen uit een eerdere sessie).
+  gekozenFase: string | null;
+
   gekozenInterventieId: string | null;
   contraIndicatieAntwoorden: Record<string, boolean>;
 
@@ -171,6 +190,14 @@ export type FlowAction =
   | { type: "LADEN_FOUT"; fout: string }
   | { type: "SESSIE_GESTART"; sessieId: string }
   | { type: "KIES_TRIAGE"; id: string }
+  // Requirements §7.4 stap 3: wisselen naar een ANDER, zelf ook volledig
+  // uitgewerkt item (bijv. van BPPV naar vestibulaire hypofunctie) vereist
+  // een nieuwe bundel op te halen — dat kan de reducer niet zelf (async),
+  // vandaar een apart start/ok/fout-drietal i.p.v. gewoon KIES_TRIAGE.
+  | { type: "TRIAGE_WISSEL_START" }
+  | { type: "TRIAGE_WISSEL_OK"; flow: FlowData }
+  | { type: "TRIAGE_WISSEL_FOUT"; fout: string }
+  | { type: "KIES_FASE"; fase: string }
   | { type: "TRIGGER_INTERRUPT"; interrupt: Interrupt }
   | { type: "BEVESTIG_INTERRUPT" }
   | { type: "NA_INTERRUPT_VERWEZEN" }
@@ -189,4 +216,6 @@ export type FlowAction =
   | { type: "START_FOLLOWUP" }
   | { type: "FOLLOWUP_INTERVENTIE"; interventieId: string }
   | { type: "FOLLOWUP_UITKOMST"; uitkomst: NonNullable<FollowupState["uitkomst"]> }
+  | { type: "FOLLOWUP_FASE_VOORTGANG"; waarde: NonNullable<FollowupState["faseVoortgang"]> }
+  | { type: "FOLLOWUP_INTERVENTIE_EFFECT"; waarde: NonNullable<FollowupState["interventieEffect"]> }
   | { type: "RESET" };
