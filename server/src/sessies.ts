@@ -78,11 +78,30 @@ sessiesRouter.patch("/:id", async (req: Request<{ id: string }>, res: Response) 
     return;
   }
   const aandoeningId = typeof req.body?.aandoeningId === "string" ? req.body.aandoeningId : undefined;
+
+  // Requirements §8.4: koppelt deze sessie aan een Behandelepisode
+  // (trendweergave, PPPD) — optioneel, alleen relevant voor items met
+  // vereistEpisodeTrend (zie flow.ts). vervaltOp van de episode verlengt
+  // mee met deze sessie, nooit verkort (zelfde principe als schema.prisma
+  // bij Behandelepisode toegelicht) — zo bestaat de episode nooit korter
+  // dan haar laatst gekoppelde sessie.
+  const episodeId = typeof req.body?.episodeId === "string" ? req.body.episodeId : undefined;
+  if (episodeId) {
+    const episode = await prisma.behandelepisode.findUnique({ where: { id: episodeId } });
+    if (!episode || episode.therapeutId !== req.therapeutId) {
+      res.status(404).json({ error: "Behandeltraject niet gevonden." });
+      return;
+    }
+    if (episode.vervaltOp < sessie!.vervaltOp) {
+      await prisma.behandelepisode.update({ where: { id: episodeId }, data: { vervaltOp: sessie!.vervaltOp } });
+    }
+  }
+
   const updated = await prisma.sessie.update({
     where: { id: req.params.id },
-    data: { aandoeningId },
+    data: { aandoeningId, episodeId },
   });
-  res.json({ id: updated.id, aandoeningId: updated.aandoeningId });
+  res.json({ id: updated.id, aandoeningId: updated.aandoeningId, episodeId: updated.episodeId });
 });
 
 // ---------------------------------------------------------------------

@@ -42,6 +42,18 @@ export async function zetAandoening(sessieId: string, aandoeningId: string): Pro
   await json(res, "Kon aandoening niet koppelen aan sessie.");
 }
 
+// Requirements §8.4: koppelt een sessie aan een Behandelepisode (trend-
+// weergave, PPPD) — hergebruikt dezelfde PATCH-route als zetAandoening.
+export async function koppelEpisode(sessieId: string, episodeId: string): Promise<void> {
+  const res = await fetch(`/api/sessies/${sessieId}`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ episodeId }),
+  });
+  await json(res, "Kon behandeltraject niet koppelen aan sessie.");
+}
+
 export async function fetchSessie(sessieId: string): Promise<SessieDetail> {
   const res = await fetch(`/api/sessies/${sessieId}`, { credentials: "include" });
   return json(res, "Kon sessie niet ophalen.");

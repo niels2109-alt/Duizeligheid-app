@@ -1,5 +1,5 @@
 import type { FlowAction, FlowState } from "./types";
-import { bouwHypothesen, trailEntry, zetWeging } from "./logic";
+import { bouwHypothesen, effectieveDiagnostischeWaarde, trailEntry, zetWeging } from "./logic";
 
 export const initialFlowState: FlowState = {
   flow: null,
@@ -10,16 +10,28 @@ export const initialFlowState: FlowState = {
   hypotheses: [],
   gekozenTriageId: null,
   interrupt: null,
+  voorwaardeCheckPending: null,
+  voorwaardenBevestigd: {},
+  episodeId: null,
   anamneseAntwoorden: {},
   gekozenTestId: null,
   gekozenBevindingRelatieId: null,
   bevestigdeKwalificatie: null,
+  hypotheseBevestigd: false,
   gekozenFase: null,
   gekozenInterventieId: null,
   contraIndicatieAntwoorden: {},
   eduVrijgegeven: false,
   trail: [],
-  followup: { vorigeInterventieId: null, uitkomst: null, faseVoortgang: null, interventieEffect: null },
+  followup: {
+    vorigeInterventieId: null,
+    uitkomst: null,
+    faseVoortgang: null,
+    interventieEffect: null,
+    npqScore: null,
+    patroonType: null,
+    notitie: null,
+  },
 };
 
 export function flowReducer(state: FlowState, action: FlowAction): FlowState {
@@ -146,6 +158,40 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
       };
     }
 
+    // Requirements §8.1: harde gate vóór het wisselen naar een voorwaarde-
+    // gated aandoening (bijv. PPPD) — de daadwerkelijke bundel-wissel loopt
+    // pas ná bevestiging via TRIAGE_WISSEL_*, net als bij een ongated item.
+    case "START_VOORWAARDE_CHECK":
+      return {
+        ...state,
+        stap: "voorwaarde-check",
+        voorwaardeCheckPending: { id: action.id, naam: action.naam, voorwaarde: action.voorwaarde },
+      };
+
+    case "BEVESTIG_VOORWAARDE":
+      return {
+        ...state,
+        voorwaardenBevestigd: { ...state.voorwaardenBevestigd, [action.relatieId]: true },
+        trail: [
+          ...state.trail,
+          trailEntry(
+            "Voorwaarde",
+            "anamnese",
+            `Voorwaarde bevestigd: ${state.voorwaardeCheckPending?.voorwaarde.bevinding ?? ""}.`,
+            [state.voorwaardeCheckPending?.voorwaarde.anamneseItemId ?? ""].filter(Boolean),
+            null
+          ),
+        ],
+      };
+
+    case "ANNULEER_VOORWAARDE_CHECK":
+      return { ...state, stap: "triage", voorwaardeCheckPending: null };
+
+    // Requirements §8.4: structurele koppeling, geen trail-entry (vgl.
+    // SESSIE_GESTART).
+    case "EPISODE_GEKOZEN":
+      return { ...state, episodeId: action.episodeId };
+
     case "KIES_FASE": {
       if (!state.flow) return state;
       return {
@@ -260,6 +306,7 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
       let hypotheses = state.hypotheses;
       let interrupt = state.interrupt;
       let bevestigdeKwalificatie = state.bevestigdeKwalificatie;
+      let hypotheseBevestigd = state.hypotheseBevestigd;
       const isNegatief = bevinding.kwalificatie?.resultaat === "negatief";
 
       if (bevinding.actietype === "acuut_verwijzen") {
@@ -283,9 +330,17 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
           `${test.naam}: ${bevinding.interpretatie}`
         );
       } else if (bevinding.naarObjectId === state.flow.aandoening.id) {
-        const weging = (bevinding.diagnostischeWaarde as "hoog" | "matig" | "laag" | null) ?? "matig";
+        // Requirements §8.1: TEST-005's diagnostische waarde is conditioneel
+        // (null + een verwijzing naar de voorwaarde-relatie) — nooit een
+        // vaste waarde. effectieveDiagnostischeWaarde lost dit op aan de
+        // hand van state.voorwaardenBevestigd; voor alle andere tests
+        // (waar diagnostischeWaarde al vast staat) verandert dit niets.
+        const weging =
+          (effectieveDiagnostischeWaarde(bevinding, state.voorwaardenBevestigd) as "hoog" | "matig" | "laag" | null) ??
+          "matig";
         hypotheses = zetWeging(hypotheses, state.flow.aandoening.id, weging, `${test.naam}: ${bevinding.interpretatie}`);
         bevestigdeKwalificatie = bevinding.kwalificatie;
+        hypotheseBevestigd = true;
       }
 
       return {
@@ -294,6 +349,7 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
         hypotheses,
         interrupt,
         bevestigdeKwalificatie,
+        hypotheseBevestigd,
         stap: "test-interpretatie",
         trail: [
           ...state.trail,
@@ -428,6 +484,30 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
         ...state,
         followup: { ...state.followup, interventieEffect: action.waarde },
         trail: [...state.trail, trailEntry("Follow-up", "followup", tekst, [], null)],
+      };
+    }
+
+    // Requirements §8.5 stap 4: trendmatige follow-up (i.p.v. binair of
+    // twee-lussen) — één invoer-actie, net als FOLLOWUP_INTERVENTIE_EFFECT
+    // schrijft dit één trail-entry met de volledige klinische inhoud als
+    // vrije tekst (geen los NPQ-score-schemaveld, zie episodes.ts).
+    case "FOLLOWUP_TREND_INVOER": {
+      const patroonLabel = action.patroonType === "verwachte_fluctuatie" ? "Verwachte fluctuatie" : "Afwijkend beloop";
+      const tekst =
+        `NPQ-score: ${action.npqScore}. Patroon: ${patroonLabel}.` +
+        (action.notitie ? ` Notitie: ${action.notitie}` : "");
+      return {
+        ...state,
+        followup: {
+          ...state.followup,
+          npqScore: action.npqScore,
+          patroonType: action.patroonType,
+          notitie: action.notitie,
+        },
+        trail: [
+          ...state.trail,
+          trailEntry("Follow-up", "followup", tekst, action.patroonType === "afwijkend_beloop" ? ["RF-010", "RF-011"] : [], null),
+        ],
       };
     }
 

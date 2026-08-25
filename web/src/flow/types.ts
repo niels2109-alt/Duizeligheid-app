@@ -1,5 +1,13 @@
 // Spiegelt de respons van GET /api/flow/bppv (server/src/flow.ts).
 
+export interface FlowVoorwaarde {
+  relatieId: string;
+  anamneseItemId: string;
+  anamneseItemNaam: string;
+  bevinding: string | null;
+  interpretatie: string | null;
+}
+
 export interface FlowDifferentiaal {
   id: string;
   naam: string;
@@ -8,6 +16,10 @@ export interface FlowDifferentiaal {
   kenmerk: string | null;
   relatietypeDifferentiaal: string | null;
   volledigUitgewerkt: boolean;
+  /// Requirements §8.1: gezet als deze differentiaal pas als hypothese mag
+  /// worden getoond/gekozen nadat aan een voorwaarde is voldaan (bijv. PPPD)
+  /// — null als er geen voorwaarde-gate op dit item zit.
+  voorwaarde: FlowVoorwaarde | null;
 }
 
 export interface FlowAnamneseCheck {
@@ -28,6 +40,11 @@ export interface FlowTestBevinding {
   bevinding: string | null;
   interpretatie: string | null;
   diagnostischeWaarde: string | null;
+  /// Requirements §8.1 (TEST-005/Bárány-criteria): conditionele
+  /// diagnostische waarde — als dit gezet is, is diagnostischeWaarde
+  /// hierboven null, en wordt de effectieve waarde client-side opgelost via
+  /// de voorwaardenBevestigd-state (zie logic.ts, effectieveDiagnostischeWaarde).
+  diagnostischeWaardeVoorwaardeRelatieId: string | null;
   actietype: string | null;
   evidenceNiveau: string | null;
 }
@@ -78,6 +95,16 @@ export interface FlowData {
     uitkomsttype: string | null;
     tier: number | null;
     evidenceNiveau: string;
+    /// Bijvangst §8.5 stap 4: als deze aandoening zelf een voorwaarde-gated
+    /// item is, moet de PRIMAIRE triagekaart (kiesTriage in ReasoningFlow.tsx)
+    /// dezelfde gate afdwingen als een differentiaal-keuze — anders omzeilt
+    /// een nieuwe sessie op een al geladen bundel de bevestiging (§8.1).
+    voorwaarde: FlowVoorwaarde | null;
+    /// Requirements §8.4: datagedreven afgeleid (heeft dit object een
+    /// inkomende voorwaarde-relatie?) — bepaalt of het follow-up-consult
+    /// (§7) de trendmatige episode-variant gebruikt i.p.v. de binaire of
+    /// twee-lussen-variant. Zie flow.ts voor de afleiding.
+    vereistEpisodeTrend: boolean;
   };
   differentialen: FlowDifferentiaal[];
   anamneseChecks: FlowAnamneseCheck[];
@@ -101,6 +128,7 @@ export interface HypotheseState {
 
 export type FlowStap =
   | "triage"
+  | "voorwaarde-check"
   | "dead-end"
   | "verwezen"
   | "anamnese"
@@ -145,6 +173,13 @@ export interface FollowupState {
   /// tot één goed/fout-oordeel.
   faseVoortgang: "verwacht" | "nog-niet" | "afwijkend" | null;
   interventieEffect: "effectief" | "onvoldoende" | null;
+  /// Items met vereistEpisodeTrend (bijv. PPPD, requirements §8.4/§8.5 stap
+  /// 4) — trendmatige evaluatie i.p.v. binaire hertest. Niet als los
+  /// schemaveld opgeslagen (zie episodes.ts) — alleen client-side state tot
+  /// de trail-entry wordt weggeschreven.
+  npqScore: number | null;
+  patroonType: "verwachte_fluctuatie" | "afwijkend_beloop" | null;
+  notitie: string | null;
 }
 
 export interface FlowState {
@@ -163,11 +198,34 @@ export interface FlowState {
   gekozenTriageId: string | null;
   interrupt: Interrupt | null;
 
+  /// Requirements §8.1: harde gate — welke aandoening-id wacht op
+  /// voorwaarde-bevestiging vóórdat er naar die bundel gewisseld wordt.
+  /// Null buiten de "voorwaarde-check"-stap.
+  voorwaardeCheckPending: { id: string; naam: string; voorwaarde: FlowVoorwaarde } | null;
+  /// Bevestigde voorwaarde-relaties in DEZE flow-sessie, per relatieId —
+  /// nooit gepersisteerd/overgenomen uit een eerdere sessie (zelfde principe
+  /// als gekozenFase, §7.1).
+  voorwaardenBevestigd: Record<string, boolean>;
+
+  /// Requirements §8.4: id van het Behandelepisode waaraan het huidige
+  /// (vervolg)consult gekoppeld is — alleen relevant bij vereistEpisodeTrend.
+  /// Null buiten die flow, en bij een RESET/nieuwe START_FOLLOWUP altijd
+  /// opnieuw gekozen (nooit automatisch overgenomen, zelfde principe als
+  /// gekozenFase/voorwaardenBevestigd).
+  episodeId: string | null;
+
   anamneseAntwoorden: Record<string, boolean>;
 
   gekozenTestId: string | null;
   gekozenBevindingRelatieId: string | null;
   bevestigdeKwalificatie: Record<string, string> | null;
+  /// Bijvangst §8.5 stap 4: een aparte afronding-vlag, los van
+  /// bevestigdeKwalificatie hierboven — die kan legitiem null zijn (PPPD's
+  /// Bárány-criteria hebben geen subtype/fase-as, referentiedocument §15),
+  /// dus kan niet als "is de hypothese bevestigd?"-signaal dienen. Vóór deze
+  /// toevoeging bleef "Naar behandelstrategie" bij zulke items onzichtbaar
+  /// en werd Sessie.aandoeningId nooit gekoppeld (zie ReasoningFlow.tsx).
+  hypotheseBevestigd: boolean;
 
   /// Requirements §7.1: fase is een tijdgebonden state, wordt via
   /// samengestelde anamnese/observatie bepaald (geen aparte test) en moet
@@ -198,6 +256,26 @@ export type FlowAction =
   | { type: "TRIAGE_WISSEL_OK"; flow: FlowData }
   | { type: "TRIAGE_WISSEL_FOUT"; fout: string }
   | { type: "KIES_FASE"; fase: string }
+  // Requirements §8.1: harde gate vóór het wisselen naar een voorwaarde-
+  // gated aandoening (bijv. PPPD). START zet de stap op "voorwaarde-check";
+  // BEVESTIG markeert de voorwaarde als vervuld (de daadwerkelijke
+  // bundel-wissel gebeurt daarna via TRIAGE_WISSEL_*, net als bij een
+  // ongated item); ANNULEER gaat terug naar de triagevraag.
+  | { type: "START_VOORWAARDE_CHECK"; id: string; naam: string; voorwaarde: FlowVoorwaarde }
+  | { type: "BEVESTIG_VOORWAARDE"; relatieId: string }
+  | { type: "ANNULEER_VOORWAARDE_CHECK" }
+  // Requirements §8.4: koppelt het huidige (vervolg)consult aan een
+  // Behandelepisode — puur structureel, geen klinische bevinding, dus geen
+  // eigen trail-entry (vgl. SESSIE_GESTART hierboven).
+  | { type: "EPISODE_GEKOZEN"; episodeId: string }
+  // Requirements §8.5 stap 4: trendmatige follow-up-invoer (NPQ-score +
+  // patroon-type + optionele notitie) voor items met vereistEpisodeTrend.
+  | {
+      type: "FOLLOWUP_TREND_INVOER";
+      npqScore: number;
+      patroonType: "verwachte_fluctuatie" | "afwijkend_beloop";
+      notitie: string;
+    }
   | { type: "TRIGGER_INTERRUPT"; interrupt: Interrupt }
   | { type: "BEVESTIG_INTERRUPT" }
   | { type: "NA_INTERRUPT_VERWEZEN" }

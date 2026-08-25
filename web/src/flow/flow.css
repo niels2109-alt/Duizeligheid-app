@@ -553,6 +553,84 @@
   resize: vertical;
 }
 
+/* --- Behandelepisode: trendmatige follow-up (requirements §8.4/§8.5 stap 4) --- */
+.episode-kiezer {
+  margin-bottom: 4px;
+}
+
+.episode-kiezer h3 {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+}
+
+.episode-list {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.veld {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 12px 0;
+}
+
+.veld input,
+.veld textarea {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+}
+
+.episode-trend-paneel {
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.episode-trend-paneel h3 {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+}
+
+.trend-tabel-wrap {
+  overflow-x: auto;
+}
+
+.trend-tabel {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin-top: 10px;
+}
+
+.trend-tabel th,
+.trend-tabel td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.trend-tabel th {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
 /* --- Sessies-overzicht --- */
 .sessies-list {
   list-style: none;

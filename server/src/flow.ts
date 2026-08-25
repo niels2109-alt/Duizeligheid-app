@@ -57,11 +57,21 @@ flowRouter.get("/:aandoeningId", async (req: Request<{ aandoeningId: string }>, 
 
   const relatiesVanuit = aandoening.relatiesVanuit;
 
+  // Requirements §8.1/§8.4: is dit ZELF een voorwaarde-gated item (bijv.
+  // PPPD)? Datagedreven, niet hardcoded op een item-id — elk toekomstig
+  // item met dezelfde datavorm (een voorwaarde-relatie die naar dit object
+  // wijst) krijgt hierdoor automatisch dezelfde trendmatige follow-up i.p.v.
+  // de binaire/twee-lussen-varianten (zie ReasoningFlow.tsx).
+  const eigenVoorwaarde = await prisma.relatie.findFirst({
+    where: { naarObjectId: AANDOENING_ID, relatieType: "voorwaarde" },
+    include: { vanObject: true },
+  });
+
   // --- Hypothesen: deze aandoening zelf + alle differentiaaldiagnose-
   // kandidaten. "volledigUitgewerkt" dynamisch: alleen items die zelf ook
   // als volledig item zijn gebouwd (status=gepubliceerd, behandeldiepte=
   // volledig) hebben een eigen bundel om naartoe te wisselen — stubs niet.
-  const differentialen = relatiesVanuit
+  const differentialenRuw = relatiesVanuit
     .filter((r) => r.relatieType === "differentiaal")
     .map((r) => ({
       id: r.naarObjectId,
@@ -73,6 +83,35 @@ flowRouter.get("/:aandoeningId", async (req: Request<{ aandoeningId: string }>, 
       volledigUitgewerkt:
         r.naarObject.status === "gepubliceerd" && r.naarObject.behandeldiepte === "volledig",
     }));
+
+  // Requirements §8.1: sommige differentialen worden pas als hypothese
+  // "vrijgegeven" nadat aan een voorwaarde-relatie is voldaan (PPPD/AAND-003
+  // is het eerste voorbeeld). Dit is een harde gate — de frontend moet dit
+  // kunnen tonen en afdwingen VÓÓR er naar de volledige bundel van dat item
+  // wordt gewisseld, dus de voorwaarde-info wordt hier al meegegeven, niet
+  // pas in de bundel van het item zelf.
+  const voorwaardeRelaties = await prisma.relatie.findMany({
+    where: {
+      naarObjectId: { in: differentialenRuw.map((d) => d.id) },
+      relatieType: "voorwaarde",
+    },
+    include: { vanObject: true },
+  });
+  const differentialen = differentialenRuw.map((d) => {
+    const vw = voorwaardeRelaties.find((r) => r.naarObjectId === d.id);
+    return {
+      ...d,
+      voorwaarde: vw
+        ? {
+            relatieId: vw.id,
+            anamneseItemId: vw.vanObjectId,
+            anamneseItemNaam: vw.vanObject.naam,
+            bevinding: vw.bevinding,
+            interpretatie: vw.interpretatie,
+          }
+        : null,
+    };
+  });
 
   // --- Anamnese: red-flag-checks die niet uit een test komen (test-
   // getriggerde red flags, zoals RF-002/RF-007, komen via `testen` hieronder)
@@ -129,6 +168,12 @@ flowRouter.get("/:aandoeningId", async (req: Request<{ aandoeningId: string }>, 
         bevinding: r.bevinding,
         interpretatie: r.interpretatie,
         diagnostischeWaarde: r.diagnostischeWaarde,
+        // Requirements §8.1 (TEST-005/Bárány-criteria): conditionele
+        // diagnostische waarde — null hierboven + een verwijzing naar de
+        // voorwaarde-relatie i.p.v. een vaste waarde. De frontend lost dit
+        // op aan de hand van of die voorwaarde in de huidige flow-sessie is
+        // bevestigd.
+        diagnostischeWaardeVoorwaardeRelatieId: r.diagnostischeWaardeVoorwaardeRelatieId,
         actietype: r.actietype,
         evidenceNiveau: r.evidenceNiveau,
       })),
@@ -212,6 +257,22 @@ flowRouter.get("/:aandoeningId", async (req: Request<{ aandoeningId: string }>, 
       uitkomsttype: aandoening.uitkomsttype,
       tier: aandoening.tier,
       evidenceNiveau: aandoening.evidenceNiveau,
+      // Bijvangst §8.5 stap 4: als deze aandoening ZELF een voorwaarde-gated
+      // item is (bijv. na een eerdere wissel is PPPD de "huidige bundel"
+      // geworden), moet de primaire triagekaart dezelfde gate afdwingen als
+      // een differentiaal-keuze — anders omzeilt een tweede sessie op
+      // dezelfde geladen bundel de voorwaarde-bevestiging volledig (§8.1:
+      // "harde gate, geen suggestie"). Zie ReasoningFlow.tsx kiesTriage().
+      voorwaarde: eigenVoorwaarde
+        ? {
+            relatieId: eigenVoorwaarde.id,
+            anamneseItemId: eigenVoorwaarde.vanObjectId,
+            anamneseItemNaam: eigenVoorwaarde.vanObject.naam,
+            bevinding: eigenVoorwaarde.bevinding,
+            interpretatie: eigenVoorwaarde.interpretatie,
+          }
+        : null,
+      vereistEpisodeTrend: eigenVoorwaarde !== null,
     },
     differentialen,
     anamneseChecks,

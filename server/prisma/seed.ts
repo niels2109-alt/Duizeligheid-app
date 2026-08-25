@@ -3,7 +3,8 @@
  * Duizeligheid-Referentiemodel.md §2-6, conform Duizeligheid-Technische-
  * Requirements-MVP.md §6.2 stap 1. Uitgebreid (requirements §7, §7.4 stap 1)
  * met het volledige tweede item — vestibulaire hypofunctie — uit
- * referentiedocument §14.
+ * referentiedocument §14, en (requirements §8, §8.5 stap 2) met het
+ * volledige derde item — PPPD — uit referentiedocument §15.
  *
  * Objecten: AAND-001 (BPPV), TEST-001/002, INT-001 t/m 004, RF-001 t/m 006,
  * EDU-001, PEARL-001, plus CI-001 t/m 005 (contra-indicaties) en zes
@@ -11,7 +12,12 @@
  * TEST-003/004, INT-005 t/m 007, CI-006, RF-007 t/m 009, EDU-002, plus
  * twee nieuwe gedeelde Tier 3-stubs (labyrintitis, acusticusneurinoom) en
  * een gereserveerde AAND-004-stub (multifactoriële duizeligheid met
- * valrisico, §19 — expliciet nog niet uitgewerkt, zie requirements §7.2).
+ * valrisico, §19 — expliciet nog niet uitgewerkt, zie requirements §7.2) —
+ * AAND-003 (PPPD), ANAM-001 (de voorwaarde-conditie, eerste echte gebruik
+ * van typeObject=anamnese_item en relatieType=voorwaarde), TEST-005/006,
+ * INT-008 t/m 010, RF-010 t/m 012 (eerste echte gebruik van actietype =
+ * samenwerking_adviseren), EDU-003, plus twee nieuwe Tier 3-stubs
+ * (angststoornis, depressie).
  *
  * ---------------------------------------------------------------------
  * MODELLERINGSBESLISSINGEN (afgestemd met opdrachtgever vóór het bouwen)
@@ -676,25 +682,268 @@ async function main() {
   // -------------------------------------------------------------------
   // Differentiaaldiagnose-stubs (referentiedocument §6, relatietype §18)
   // -------------------------------------------------------------------
+  // =====================================================================
+  // AAND-003 — PPPD, volledig item (referentiedocument §15, requirements §8)
+  // =====================================================================
   await prisma.knowledgeObject.create({
     data: {
-      // Reserveert bewust de id die het referentiedocument (§15) al voor de
-      // toekomstige volledige uitwerking van dit item gebruikt.
       id: "AAND-003",
-      naam: "PPPD (stub)",
+      naam: "PPPD",
       typeObject: TypeObject.aandoening,
+      // "zelfstandig fysio, met eventuele samenwerking" (§15) — het model
+      // kent geen los "met eventuele samenwerking"-niveau naast de drie
+      // vaste waarden; zelfstandig_fysio blijft het beste passend, want de
+      // fysio blijft primair verantwoordelijk (i.t.t. niet_fysio_verwijzen)
+      // en dit is geen structureel gedeeld traject vanaf dag 1 (i.t.t.
+      // gedeeld_multidisciplinair). De samenwerkingscomponent wordt expliciet
+      // gedragen door RF-010/011 (actietype = samenwerking_adviseren).
       behandelverantwoordelijkheid: Behandelverantwoordelijkheid.zelfstandig_fysio,
+      // "volledig, met randvoorwaarde" (§15) — het model kent geen aparte
+      // "met randvoorwaarde"-waarde; die randvoorwaarde wordt hier juist
+      // als eigen, expliciete mechanisme geïmplementeerd via de
+      // voorwaarde-relatie hieronder (§8.1), niet als bijschrift op dit veld.
       behandeldiepte: Behandeldiepte.volledig,
       tier: 1,
+      // §19/§7.2-precedent: enkelvoudig, net als BPPV en vestibulaire
+      // hypofunctie — geen samengesteld-uitkomst-logica nodig.
+      uitkomsttype: Uitkomsttype.enkelvoudig,
       kernbeschrijving:
-        "STUB — onderscheidend t.o.v. BPPV: chronisch, visueel/proprioceptief " +
-        "uitgelokt, geen korte draaiaanvallen. Volledige uitwerking volgt in " +
-        "een latere bouwfase (referentiedocument §15, roadmap §25 punt 3).",
+        "Functionele aanpassingsstoornis — geen structurele afwijking, " +
+        "verhoogde alertheid op beweging/visuele prikkels na een " +
+        "precipiterend event, in stand gehouden door " +
+        "bewegingsangst/vermijding.",
+      klinischeKenmerken:
+        "Chronisch (≥3 maanden), niet-vertigineus (onvastheid/zwaarte i.p.v. " +
+        "draaiduizeligheid), uitgelokt door rechtop staan/lopen/beweging/" +
+        "complexe visuele prikkels, vaak vervolgdiagnose na ander (hersteld) " +
+        "organisch event.",
+      // Consensus (Bárány Society-criteria, 2017) — expliciet géén
+      // richtlijn-niveau (§15), moet zichtbaar blijven, dus bewust niet
+      // opgewaardeerd naar richtlijn.
+      evidenceNiveau: EvidenceNiveau.consensus,
+      status: ObjectStatus.gepubliceerd,
+      laatstGecontroleerdOp: INGEVOERD_OP,
+      zichtbaarTherapeut: true,
+      zichtbaarPatient: true,
+    },
+  });
+
+  // --- ANAM-001: de voorwaarde-conditie zelf (requirements §8.1) ----------
+  // Eerste echte gebruik van typeObject = anamnese_item. Representeert de
+  // gate waaraan voldaan moet zijn vóórdat PPPD als hypothese getoond mag
+  // worden — geen patiëntgerichte content, dus zichtbaarPatient = false.
+  await prisma.knowledgeObject.create({
+    data: {
+      id: "ANAM-001",
+      naam: "Differentiaaldiagnostisch traject afgerond + tijdscriterium (PPPD)",
+      typeObject: TypeObject.anamnese_item,
+      kernbeschrijving:
+        "Voorwaarde voor de PPPD-hypothese (§8.1): (a) een " +
+        "differentiaaldiagnostisch traject is afgerond — andere Tier 1/2/3-" +
+        "hypothesen zijn overwogen/uitgesloten — én (b) het klachtenpatroon " +
+        "houdt ≥3 maanden aan op de meeste dagen. Zolang hieraan niet is " +
+        "voldaan, mag PPPD niet als hypothese getoond worden — een harde " +
+        "gate, geen suggestie.",
+      evidenceNiveau: EvidenceNiveau.consensus,
+      status: ObjectStatus.gepubliceerd,
+      laatstGecontroleerdOp: INGEVOERD_OP,
+      zichtbaarTherapeut: true,
+      zichtbaarPatient: false,
+    },
+  });
+
+  // --- TEST-005/006 (referentiedocument §15) -------------------------------
+  await prisma.knowledgeObject.create({
+    data: {
+      id: "TEST-005",
+      naam: "Bárány-criteria (checklist)",
+      typeObject: TypeObject.onderzoekstest,
+      kernbeschrijving:
+        "Consensuscriteria (Bárány Society, 2017) voor PPPD — een checklist, " +
+        "geen fysieke test. Diagnostische waarde is conditioneel: alleen " +
+        "'hoog' zodra de voorwaarde (ANAM-001, §8.1) is vervuld — nooit als " +
+        "vaste waarde (zie de relatie hieronder).",
+      evidenceNiveau: EvidenceNiveau.consensus,
+      status: ObjectStatus.gepubliceerd,
+      laatstGecontroleerdOp: INGEVOERD_OP,
+      zichtbaarTherapeut: true,
+      zichtbaarPatient: true,
+    },
+  });
+  await prisma.knowledgeObject.create({
+    data: {
+      id: "TEST-006",
+      naam: "Niigata PPPD Questionnaire (NPQ)",
+      typeObject: TypeObject.onderzoekstest,
+      kernbeschrijving:
+        "Ondersteunend/monitorend vragenlijst-instrument, geen diagnostisch " +
+        "criterium op zichzelf. Met name gebruikt voor de trendmatige " +
+        "follow-up (§8.4) — NPQ-score gevolgd over meerdere sessies binnen " +
+        "een behandelepisode. Bewust niet gekoppeld aan een indicatie-" +
+        "relatie voor de initiële testselectie (dat is TEST-005 se rol) — " +
+        "zie requirements §15/§8.4.",
+      evidenceNiveau: EvidenceNiveau.observationeel,
+      status: ObjectStatus.gepubliceerd,
+      laatstGecontroleerdOp: INGEVOERD_OP,
+      zichtbaarTherapeut: true,
+      zichtbaarPatient: true,
+    },
+  });
+
+  // --- INT-008 t/m 010 (referentiedocument §15) -----------------------------
+  await prisma.knowledgeObject.create({
+    data: {
+      id: "INT-008",
+      naam: "Exposure-training",
+      typeObject: TypeObject.interventie,
+      kernbeschrijving:
+        "Graduele blootstelling aan bewegings-/visuele prikkels die worden " +
+        "vermeden, gekwalificeerd naar mate van vermijdingsgedrag.",
+      evidenceNiveau: EvidenceNiveau.systematic_review,
+      status: ObjectStatus.gepubliceerd,
+      laatstGecontroleerdOp: INGEVOERD_OP,
+      zichtbaarTherapeut: true,
+      zichtbaarPatient: true,
+    },
+  });
+  await prisma.knowledgeObject.create({
+    data: {
+      id: "INT-009",
+      naam: "Visuele desensitisatie",
+      typeObject: TypeObject.interventie,
+      kernbeschrijving:
+        "Gewenning aan complexe/bewegende visuele prikkels die klachten " +
+        "uitlokken.",
+      // Brondocument geeft "observationeel/consensus" — geen eenduidige
+      // keuze; hier op het letterlijk eerstgenoemde niveau gezet, net als
+      // bij RF-009's "kan escaleren"-nuance (stap 7).
+      evidenceNiveau: EvidenceNiveau.observationeel,
+      status: ObjectStatus.gepubliceerd,
+      laatstGecontroleerdOp: INGEVOERD_OP,
+      zichtbaarTherapeut: true,
+      zichtbaarPatient: true,
+    },
+  });
+  await prisma.knowledgeObject.create({
+    data: {
+      id: "INT-010",
+      naam: "Psycho-educatie functioneel karakter",
+      // Requirements §8.2: expliciet interventie, NIET patienteducatie_item
+      // — actieve, therapeut-geleide inzet tijdens het consult (stap 5
+      // behandelstrategie), te onderscheiden van EDU-003 (stap 6, zelfstandig
+      // patiëntenmateriaal). Inhoudelijke overlap is bewust geen reden om
+      // samen te voegen.
+      typeObject: TypeObject.interventie,
+      kernbeschrijving:
+        "Actieve, therapeut-geleide uitleg over het functionele (niet-" +
+        "structurele) karakter van de klachten, ingezet tijdens het consult " +
+        "— te onderscheiden van EDU-003 (zelfstandig patiëntenmateriaal): " +
+        "zelfde onderwerp, ander gebruik (§8.2).",
+      evidenceNiveau: EvidenceNiveau.consensus,
+      status: ObjectStatus.gepubliceerd,
+      laatstGecontroleerdOp: INGEVOERD_OP,
+      zichtbaarTherapeut: true,
+      zichtbaarPatient: true,
+    },
+  });
+
+  // --- RF-010 t/m 012 (referentiedocument §15) ------------------------------
+  // RF-010/011: eerste echte gebruik van actietype = samenwerking_adviseren
+  // (§8.3) — niet-acuut, functioneel: fysio blijft betrokken maar niet
+  // alleen. UI-eis: geen rode/alarmerende styling zoals bij acuut_verwijzen
+  // — de bestaande urgent/critical-styling in Modus A/B is al strikt
+  // beperkt tot actietype === "acuut_verwijzen", dus dit werkt hier
+  // automatisch correct zonder extra code (geverifieerd bij stap 3/4).
+  //
+  // Brondocument geeft alleen kenmerken + actietype voor deze drie (geen
+  // aparte interpretatietekst zoals bij RF-007/008/009) — interpretatie
+  // hieronder is daarom een minimale, direct uit het actietype afgeleide
+  // formulering, niets extra's verzonnen.
+  const pppdRedFlags = [
+    {
+      id: "RF-010",
+      naam: "Uitblijvend herstel ondanks correcte uitvoering",
+      kenmerken: "Uitblijvend herstel ondanks correcte uitvoering",
+      interpretatie:
+        "Fysiotherapie alleen volstaat mogelijk niet — samenwerking met een andere discipline overwegen",
+      actietype: ActieType.samenwerking_adviseren,
+    },
+    {
+      id: "RF-011",
+      naam: "Angststoornis/depressie op voorgrond i.p.v. instandhoudend",
+      kenmerken: "Angststoornis/depressie op voorgrond i.p.v. instandhoudend",
+      interpretatie:
+        "Angststoornis/depressie kan op de voorgrond staan i.p.v. instandhoudende factor — samenwerking met een andere discipline overwegen",
+      actietype: ActieType.samenwerking_adviseren,
+    },
+    {
+      id: "RF-012",
+      naam: "Voldoet niet meer aan Bárány-criteria bij nadere evaluatie",
+      kenmerken: "Voldoet niet meer aan Bárány-criteria bij nadere evaluatie",
+      interpretatie: "Voldoet niet meer aan de diagnostische criteria — heroverweeg de hypothese",
+      actietype: ActieType.hypothese_heroverwegen,
+    },
+  ];
+  for (const rf of pppdRedFlags) {
+    await prisma.knowledgeObject.create({
+      data: {
+        id: rf.id,
+        naam: rf.naam,
+        typeObject: TypeObject.red_flag,
+        kernbeschrijving: `${rf.kenmerken} → ${rf.interpretatie}.`,
+        evidenceNiveau: EvidenceNiveau.consensus,
+        status: ObjectStatus.gepubliceerd,
+        laatstGecontroleerdOp: INGEVOERD_OP,
+        zichtbaarTherapeut: true,
+        zichtbaarPatient: true,
+      },
+    });
+  }
+
+  // --- EDU-003 (referentiedocument §15) -------------------------------------
+  // Zelfde aanpak als EDU-001/002. Geen enkele PPPD-red-flag heeft
+  // actietype = acuut_verwijzen (RF-010/011 = samenwerking_adviseren,
+  // RF-012 = hypothese_heroverwegen), dus signaleringObjectIds blijft leeg
+  // — consistent met het "alleen acuut_verwijzen wordt patiëntgericht
+  // alarmsignaal"-patroon uit EDU-001/002, hier tot zijn logische
+  // conclusie: geen signalering nodig omdat er simpelweg geen urgent
+  // PPPD-signaal bestaat.
+  await prisma.knowledgeObject.create({
+    data: {
+      id: "EDU-003",
+      naam: "Patiënteducatie PPPD",
+      typeObject: TypeObject.patienteducatie_item,
+      kernbeschrijving:
+        "Patiëntgerichte uitleg over PPPD: wat het is, geruststelling dat er " +
+        "geen structurele afwijking is zonder dat dit als 'niet serieus " +
+        "genomen' aanvoelt, de rationale achter counter-intuïtieve adviezen " +
+        "(bewegen ondanks klachten), zelfmanagement, en wanneer contact op " +
+        "te nemen. Bevat bewust geen testinterpretatie of contra-indicaties " +
+        "in klinische taal.",
       evidenceNiveau: EvidenceNiveau.consensus,
       status: ObjectStatus.concept,
       laatstGecontroleerdOp: INGEVOERD_OP,
       zichtbaarTherapeut: true,
       zichtbaarPatient: true,
+    },
+  });
+  await prisma.patientEducatieObject.create({
+    data: {
+      id: "EDU-003-PEO",
+      knowledgeObjectId: "EDU-003",
+      verwachtingsmanagement:
+        "PPPD kan een langdurig traject zijn; herstel verloopt vaak " +
+        "geleidelijk, niet in een rechte lijn. Terugval bij stress hoort " +
+        "bij het beloop en is op zichzelf geen reden tot ongerustheid.",
+      // Nieuw generiek element t.o.v. EDU-001/002 (§15): rationale-uitleg
+      // bij counter-intuïtieve adviezen.
+      rationaleUitlegCounterintuitief:
+        "Bewegen en de vermeden situaties juist weer opzoeken helpt het " +
+        "evenwichtssysteem te herstellen, ook al voelt dat tegenstrijdig " +
+        "aan wanneer bewegen duizeligheid oproept.",
+      samengesteld: false,
+      bronObjectIds: j(["AAND-003"]),
+      signaleringObjectIds: j([]),
     },
   });
 
@@ -787,6 +1036,23 @@ async function main() {
         "STUB — onderscheidend t.o.v. vestibulaire hypofunctie: " +
         "geleidelijker beloop, vaak met progressief eenzijdig " +
         "gehoorverlies (zie ook RF-003).",
+    },
+    // §15: PPPD's differentiaaldiagnose is overwegend comorbide — twee
+    // nieuwe stubs voor de psychische differentialen die daar genoemd
+    // worden, nog niet eerder in de kennisbank aanwezig.
+    {
+      id: "STUB-ANGSTSTOORNIS",
+      naam: "Angststoornis (stub)",
+      kernbeschrijving:
+        "STUB — kan comorbide voorkomen bij PPPD (§15), of op de voorgrond " +
+        "staan i.p.v. instandhoudende factor (zie RF-011).",
+    },
+    {
+      id: "STUB-DEPRESSIE",
+      naam: "Depressie (stub)",
+      kernbeschrijving:
+        "STUB — kan comorbide voorkomen bij PPPD (§15), of op de voorgrond " +
+        "staan i.p.v. instandhoudende factor (zie RF-011).",
     },
   ];
   for (const s of tier3Stubs) {
@@ -1294,6 +1560,128 @@ async function main() {
         relatieType: RelatieType.differentiaal,
         bevinding: d.kenmerk,
         relatietypeDifferentiaal: d.type,
+      },
+    });
+  }
+
+  // =====================================================================
+  // RELATIES — AAND-003 (PPPD), referentiedocument §15, requirements §8
+  // =====================================================================
+
+  // --- ANAM-001 → AAND-003: DE VOORWAARDE-RELATIE (§8.1) --------------------
+  // Eerste echte gebruik van relatieType = voorwaarde. Bevinding/interpretatie
+  // hergebruikt zoals eerder bij bevinding_interpretatie (zie toelichting
+  // bovenaan dit bestand) — er zijn geen aparte, voorwaarde-specifieke velden
+  // in het schema. Het id wordt hier bewaard, want TEST-005's relatie
+  // hieronder verwijst er expliciet naar (diagnostischeWaardeVoorwaardeRelatieId,
+  // §1.3/§8.1 — nooit een vaste diagnostische waarde).
+  const pppdVoorwaardeRelatieId = nextRelatieId();
+  await prisma.relatie.create({
+    data: {
+      id: pppdVoorwaardeRelatieId,
+      vanObjectId: "ANAM-001",
+      naarObjectId: "AAND-003",
+      relatieType: RelatieType.voorwaarde,
+      bevinding:
+        "Differentiaaldiagnostisch traject afgerond + klachtenpatroon " +
+        "≥3 maanden aanhoudend op de meeste dagen",
+      interpretatie:
+        "Voorwaarde voor de PPPD-hypothese vervuld — mag nu als hypothese overwogen/getoond worden",
+      evidenceNiveau: EvidenceNiveau.consensus,
+    },
+  });
+
+  // --- TEST-005 (Bárány-criteria) → AAND-003, conditionele diagnostische
+  // waarde (§8.1) — bewust GEEN vaste diagnostischeWaarde, alleen de
+  // verwijzing naar de voorwaarde-relatie hierboven.
+  await prisma.relatie.create({
+    data: {
+      id: nextRelatieId(),
+      vanObjectId: "TEST-005",
+      naarObjectId: "AAND-003",
+      relatieType: RelatieType.bevinding_interpretatie,
+      bevinding: "Voldoet aan de Bárány-criteria (checklist)",
+      interpretatie: "Bevestigt PPPD",
+      diagnostischeWaarde: null,
+      diagnostischeWaardeVoorwaardeRelatieId: pppdVoorwaardeRelatieId,
+      evidenceNiveau: EvidenceNiveau.consensus,
+    },
+  });
+
+  // --- AAND-003 → INT-008/009/010 (interventie-indicatie) -------------------
+  // Geen fase/lateraliteit-achtige kwalificatie-assen bij PPPD — INT-008
+  // krijgt wel de "mate van vermijdingsgedrag"-kwalificatie die §15 noemt.
+  await prisma.relatie.create({
+    data: {
+      id: nextRelatieId(),
+      vanObjectId: "AAND-003",
+      naarObjectId: "INT-008",
+      relatieType: RelatieType.bevinding_interpretatie,
+      kwalificatie: j({ vermijdingsgedrag: "aanwezig" }),
+      bevinding: "Bevestigde PPPD, met vermijdingsgedrag",
+      interpretatie: "Exposure-training geïndiceerd",
+      evidenceNiveau: EvidenceNiveau.systematic_review,
+    },
+  });
+  await prisma.relatie.create({
+    data: {
+      id: nextRelatieId(),
+      vanObjectId: "AAND-003",
+      naarObjectId: "INT-009",
+      relatieType: RelatieType.bevinding_interpretatie,
+      bevinding: "Bevestigde PPPD, uitgelokt door complexe/bewegende visuele prikkels",
+      interpretatie: "Visuele desensitisatie geïndiceerd",
+      evidenceNiveau: EvidenceNiveau.observationeel,
+    },
+  });
+  await prisma.relatie.create({
+    data: {
+      id: nextRelatieId(),
+      vanObjectId: "AAND-003",
+      naarObjectId: "INT-010",
+      relatieType: RelatieType.bevinding_interpretatie,
+      bevinding: "Bevestigde PPPD",
+      interpretatie: "Psycho-educatie functioneel karakter geïndiceerd",
+      evidenceNiveau: EvidenceNiveau.consensus,
+    },
+  });
+
+  // --- AAND-003 → RF-010/011/012 (anamnese-/follow-up-red flags) -----------
+  for (const rf of pppdRedFlags) {
+    await prisma.relatie.create({
+      data: {
+        id: nextRelatieId(),
+        vanObjectId: "AAND-003",
+        naarObjectId: rf.id,
+        relatieType: RelatieType.bevinding_interpretatie,
+        bevinding: rf.kenmerken,
+        interpretatie: rf.interpretatie,
+        actietype: rf.actietype,
+        evidenceNiveau: EvidenceNiveau.consensus,
+      },
+    });
+  }
+
+  // --- AAND-003 → differentiaaldiagnose (§15: overwegend comorbide) --------
+  // Brondocument noemt hier geen enkele differentiaal expliciet als
+  // "uitsluitend" (i.t.t. bij AAND-001/002) — alle vier hier dus comorbide,
+  // consistent met "eerste item waar comorbide-relaties in de meerderheid
+  // zijn t.o.v. uitsluitend".
+  const differentialenPppd = [
+    { naar: "STUB-VEST-MIGRAINE", kenmerk: "Kan comorbide voorkomen — langere episodes, migraine-anamnese" },
+    { naar: "AAND-002", kenmerk: "Kan comorbide voorkomen — vestibulaire hypofunctie als precipiterend of blijvend event" },
+    { naar: "STUB-ANGSTSTOORNIS", kenmerk: "Kan comorbide voorkomen, of op de voorgrond staan i.p.v. instandhoudende factor (zie RF-011)" },
+    { naar: "STUB-DEPRESSIE", kenmerk: "Kan comorbide voorkomen, of op de voorgrond staan i.p.v. instandhoudende factor (zie RF-011)" },
+  ];
+  for (const d of differentialenPppd) {
+    await prisma.relatie.create({
+      data: {
+        id: nextRelatieId(),
+        vanObjectId: "AAND-003",
+        naarObjectId: d.naar,
+        relatieType: RelatieType.differentiaal,
+        bevinding: d.kenmerk,
+        relatietypeDifferentiaal: RelatietypeDifferentiaal.comorbide,
       },
     });
   }

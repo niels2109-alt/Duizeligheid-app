@@ -17,6 +17,7 @@ import { parseJsonField } from "./serialize";
 import { flowRouter } from "./flow";
 import { authRouter } from "./auth";
 import { sessiesRouter } from "./sessies";
+import { episodesRouter } from "./episodes";
 import { aiRouter } from "./ai";
 import { startSessieOpschoning } from "./cleanup";
 
@@ -29,6 +30,7 @@ app.use(cookieParser());
 app.use("/api/flow", flowRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/sessies", sessiesRouter);
+app.use("/api/episodes", episodesRouter);
 app.use("/api/ai", aiRouter);
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
