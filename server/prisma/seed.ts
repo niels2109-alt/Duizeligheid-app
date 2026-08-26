@@ -77,6 +77,7 @@ import {
   ActieType,
   PatroonType,
   BijdrageGewicht,
+  Polariteit,
 } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -1290,6 +1291,243 @@ async function main() {
   }
 
   // =====================================================================
+  // §11.4 STAP 1 — GEDEELD SYMPTOOMVOCABULAIRE (Clinical Reasoning Engine V2)
+  // =====================================================================
+  // Bron: Symptoomvocabulaire-Addendum-BPPD-Proefmigratie.md, vier
+  // migraties. Elk vocabulaire-item (typeObject anamnese_item/symptoom)
+  // krijgt hieronder een bevinding_interpretatie-relatie naar ALLE VIER
+  // AAND-00X-objecten tegelijk, met polariteit (richting) + diagnostische
+  // waarde (gewicht) — het datamodel voor de V2-rangschikking (§11.1).
+  // Dit is puur additief: geen van de bestaande V1-relaties/objecten wordt
+  // aangeraakt, en geen enkele bestaande relatie krijgt alsnog een
+  // polariteit ingevuld (V1 gebruikt dit veld niet, zie schema-toelichting).
+  //
+  // AANNAMES specifiek voor deze stap (aanvullend op de lijst bovenaan dit
+  // bestand):
+  // - evidence_niveau: net als bij RF/CI/EDU niet expliciet per item
+  //   vermeld in het addendum — hier consistent op `consensus` gezet.
+  // - ANAM-004 (afwezigheid gehoorklachten) wordt, conform het addendum,
+  //   WEL als object + vier neutrale relaties aangemaakt (het is een reëel
+  //   BPPD-kenmerk), maar expliciet gemarkeerd als Tier 3-differentiator,
+  //   geen bruikbare cross-hypothese-discriminator tussen de vier
+  //   hoofditems — zie addendums "Belangrijkste bevinding" bij migratie 1.
+  // - ANAM-014 (uitlokking door complexe visuele prikkels) vs. FACTOR-003
+  //   (objectieve visusachteruitgang): addendum-bevinding 1 bij migratie 4
+  //   waarschuwt dat dit twee fundamenteel verschillende constructen zijn
+  //   die toevallig beide "visueel" heten — expliciet uit elkaar gehouden
+  //   in kernbeschrijving hieronder, geen relatie tussen de twee gelegd.
+  // - Migratie 4 (multifactorieel) gebruikt de daadwerkelijk in §10
+  //   gebouwde objecten, NIET de hypothetische FACTOR-001..008-nummering
+  //   uit het addendum zelf (dat document is geschreven vóór §10 en noemt
+  //   acht losse FACTOR-ids die niet allemaal bestaan). Vertaling:
+  //   addendum FACTOR-001..004 → echte FACTOR-001..004 (ongewijzigd),
+  //   addendum FACTOR-005 (orthostase) → echte RF-004 (hergebruikt object,
+  //   §10), addendum FACTOR-006 (milde vestibulaire achteruitgang) → echte
+  //   TEST-003 (hergebruikt object, §10), addendum FACTOR-007 (valangst) →
+  //   echte FACTOR-006, addendum FACTOR-008 (cognitieve achteruitgang) →
+  //   echte FACTOR-005 (de laatste twee zijn in §10 in omgekeerde volgorde
+  //   vastgelegd t.o.v. het addendum). Geen nieuwe/dubbele FACTOR-objecten
+  //   aangemaakt — alle acht rijen wijzen naar bestaande §10-objecten.
+  const vocabulaireV2Objecten: {
+    id: string;
+    naam: string;
+    typeObject: TypeObject;
+    kernbeschrijving: string;
+  }[] = [
+    // --- Migratie 1: BPPD (referentiedocument §2) -----------------------
+    {
+      id: "ANAM-002",
+      naam: "Duur van de episode: seconden – <1 minuut",
+      typeObject: TypeObject.anamnese_item,
+      kernbeschrijving:
+        "Opgesplitst uit de BPPD-tekst (§2) t.b.v. het gedeelde " +
+        "symptoomvocabulaire (§11): duur van de vertigo-episode is " +
+        "kortdurend — seconden tot minder dan een minuut.",
+    },
+    {
+      id: "SYMP-002",
+      naam: "Aard van de klacht: heftige rotatoire vertigo",
+      typeObject: TypeObject.symptoom,
+      kernbeschrijving:
+        "Opgesplitst uit de BPPD-tekst (§2): de klacht is een heftige, " +
+        "rotatoire (draaiende) vertigo — geen vage onbalans.",
+    },
+    {
+      id: "ANAM-003",
+      naam:
+        "Uitlokkende factor: specifieke hoofd-/houdingsbeweging (omdraaien in bed, hoofd achterover, bukken)",
+      typeObject: TypeObject.anamnese_item,
+      kernbeschrijving:
+        "Opgesplitst uit de BPPD-tekst (§2): de episode wordt uitgelokt " +
+        "door een specifieke hoofd-/houdingsbeweging.",
+    },
+    {
+      id: "ANAM-004",
+      naam: "Gehoorklachten: afwezig",
+      typeObject: TypeObject.anamnese_item,
+      kernbeschrijving:
+        "Opgesplitst uit de BPPD-tekst (§2): geen gehoorverlies/tinnitus. " +
+        "Bleek in de proefmigratie neutraal tegenover alle vier Tier " +
+        "1/2-hoofditems — de werkelijke onderscheidende waarde ligt bij " +
+        "Tier 3 (o.a. Menière), niet bij de onderlinge rangschikking " +
+        "hieronder (zie addendum, 'Belangrijkste bevinding').",
+    },
+    {
+      id: "ANAM-005",
+      naam: "Klachtenvrije intervallen tussen episodes",
+      typeObject: TypeObject.anamnese_item,
+      kernbeschrijving:
+        "Opgesplitst uit de BPPD-tekst (§2): tussen de episodes door is " +
+        "de patiënt klachtenvrij.",
+    },
+    {
+      id: "ANAM-006",
+      naam: "Recidiverend beloop",
+      typeObject: TypeObject.anamnese_item,
+      kernbeschrijving:
+        "Opgesplitst uit de BPPD-tekst (§2): de episodes recidiveren " +
+        "(komen terug).",
+    },
+    // --- Migratie 2: Vestibulaire hypofunctie (referentiedocument §14) --
+    {
+      id: "ANAM-007",
+      naam: "Continue duizeligheid, niet aanvalsgewijs",
+      typeObject: TypeObject.anamnese_item,
+      kernbeschrijving:
+        "Opgesplitst uit de vestibulaire-hypofunctie-tekst (§14): " +
+        "duizeligheid/onbalans is continu aanwezig, niet aanvalsgewijs. " +
+        "Zwak onderscheidend tussen de drie chronische aandoeningen " +
+        "(vestibulaire hypofunctie-chronisch, PPPD, multifactorieel) — " +
+        "zie addendum migratie 2, bevinding 2.",
+    },
+    {
+      id: "ANAM-008",
+      naam: "Niet houdingsafhankelijk",
+      typeObject: TypeObject.anamnese_item,
+      kernbeschrijving:
+        "Opgesplitst uit de vestibulaire-hypofunctie-tekst (§14): de " +
+        "klacht is niet houdingsafhankelijk (deels redundant met ANAM-007).",
+    },
+    {
+      id: "SYMP-003",
+      naam: "Hevige rotatoire vertigo (fase=acuut, lateraliteit=unilateraal)",
+      typeObject: TypeObject.symptoom,
+      kernbeschrijving:
+        "Opgesplitst uit de vestibulaire-hypofunctie-tekst (§14): bij het " +
+        "unilaterale, acute begin een hevige rotatoire vertigo — de " +
+        "polariteit hieronder geldt uitsluitend bij deze fase/" +
+        "lateraliteits-kwalificatie.",
+    },
+    {
+      id: "ANAM-009",
+      naam: "Misselijkheid/braken (fase=acuut)",
+      typeObject: TypeObject.anamnese_item,
+      kernbeschrijving:
+        "Opgesplitst uit de vestibulaire-hypofunctie-tekst (§14): " +
+        "misselijkheid/braken tijdens de acute fase.",
+    },
+    {
+      id: "SYMP-004",
+      naam: "Vaag onbalansgevoel (fase=chronisch)",
+      typeObject: TypeObject.symptoom,
+      kernbeschrijving:
+        "Opgesplitst uit de vestibulaire-hypofunctie-tekst (§14): na de " +
+        "acute fase een vaag, aanhoudend onbalansgevoel. Zwak " +
+        "onderscheidend tussen de drie chronische aandoeningen — zie " +
+        "addendum migratie 2, bevinding 2.",
+    },
+    {
+      id: "ANAM-010",
+      naam: "Afwezigheid van vertigo-aanval (lateraliteit=bilateraal)",
+      typeObject: TypeObject.anamnese_item,
+      kernbeschrijving:
+        "Opgesplitst uit de vestibulaire-hypofunctie-tekst (§14): bij " +
+        "bilaterale uitval ontbreekt de heftige vertigo-aanval die bij " +
+        "unilaterale uitval wél optreedt.",
+    },
+    {
+      id: "SYMP-005",
+      naam: "Oscillopsie (wazig zien bij hoofdbeweging, lateraliteit=bilateraal)",
+      typeObject: TypeObject.symptoom,
+      kernbeschrijving:
+        "Opgesplitst uit de vestibulaire-hypofunctie-tekst (§14): " +
+        "oscillopsie, kenmerkend bij bilaterale vestibulaire uitval.",
+    },
+    // --- Migratie 3: PPPD (referentiedocument §15) ----------------------
+    {
+      id: "ANAM-011",
+      naam: "Duur ≥3 maanden, meeste dagen",
+      typeObject: TypeObject.anamnese_item,
+      kernbeschrijving:
+        "Opgesplitst uit de PPPD-tekst (§15): klachten bestaan chronisch " +
+        "(≥3 maanden) op de meeste dagen. Los van de bestaande " +
+        "voorwaarde-relatie ANAM-001→AAND-003 (§8.1), die blijft ongewijzigd.",
+    },
+    {
+      id: "SYMP-006",
+      naam: "Niet-vertigineus: onvastheid/zwaarte i.p.v. draaiduizeligheid",
+      typeObject: TypeObject.symptoom,
+      kernbeschrijving:
+        "Opgesplitst uit de PPPD-tekst (§15): de klacht is niet-" +
+        "vertigineus — onvastheid/zwaarte in plaats van draaiduizeligheid.",
+    },
+    {
+      id: "ANAM-012",
+      naam: "Uitgelokt door rechtop staan/lopen",
+      typeObject: TypeObject.anamnese_item,
+      kernbeschrijving:
+        "Opgesplitst uit de PPPD-tekst (§15): klachten verergeren bij " +
+        "rechtop staan/lopen.",
+    },
+    {
+      id: "ANAM-013",
+      naam: "Uitgelokt door actieve/passieve eigen beweging",
+      typeObject: TypeObject.anamnese_item,
+      kernbeschrijving:
+        "Opgesplitst uit de PPPD-tekst (§15): klachten verergeren bij " +
+        "actieve/passieve eigen beweging.",
+    },
+    {
+      id: "ANAM-014",
+      naam: "Uitgelokt door complexe/bewegende visuele prikkels",
+      typeObject: TypeObject.anamnese_item,
+      kernbeschrijving:
+        "Opgesplitst uit de PPPD-tekst (§15): klachten verergeren bij " +
+        "complexe/bewegende visuele prikkels (functionele overgevoeligheid " +
+        "voor visuele input). LET OP — dit is een fundamenteel ander " +
+        "construct dan FACTOR-003 (objectieve visusachteruitgang/" +
+        "verminderde gezichtsscherpte, §16): beide woorden 'visueel', maar " +
+        "geen enkele relatie tussen deze twee objecten (addendum migratie " +
+        "4, bevinding 1) — bij het bouwen van de vragenlijst-UI dit " +
+        "onderscheid glashelder houden.",
+    },
+    {
+      id: "ANAM-015",
+      naam: "Precipiterend organisch event in voorgeschiedenis, al hersteld",
+      typeObject: TypeObject.anamnese_item,
+      kernbeschrijving:
+        "Opgesplitst uit de PPPD-tekst (§15): een precipiterend organisch " +
+        "event (bijv. eerdere BPPV/neuritis) in de voorgeschiedenis, " +
+        "inmiddels hersteld.",
+    },
+  ];
+  for (const o of vocabulaireV2Objecten) {
+    await prisma.knowledgeObject.create({
+      data: {
+        id: o.id,
+        naam: o.naam,
+        typeObject: o.typeObject,
+        kernbeschrijving: o.kernbeschrijving,
+        evidenceNiveau: EvidenceNiveau.consensus,
+        status: ObjectStatus.gepubliceerd,
+        laatstGecontroleerdOp: INGEVOERD_OP,
+        zichtbaarTherapeut: true,
+        zichtbaarPatient: false, // Interne V2-redeneervocabulaire, geen patiëntgerichte content.
+      },
+    });
+  }
+
+  // =====================================================================
   // RELATIES
   // =====================================================================
   let relatieCounter = 1;
@@ -2030,6 +2268,179 @@ async function main() {
       evidenceNiveau: EvidenceNiveau.consensus,
     },
   });
+
+  // =====================================================================
+  // §11.4 STAP 1 (vervolg) — POLARITEIT-RELATIES gedeeld symptoomvocabulaire
+  // → alle vier AAND-00X (Clinical Reasoning Engine V2, zie toelichting +
+  // aannames bij de objectdefinities hierboven).
+  // =====================================================================
+  interface PolRelSpec {
+    van: string;
+    naar: string;
+    polariteit: Polariteit;
+    gewicht?: DiagnostischeWaarde;
+    kwalificatie?: Record<string, string>;
+    interpretatie: string;
+  }
+  const polariteitRelaties: PolRelSpec[] = [
+    // ---------------- Migratie 1: BPPD (§2) — 6 items × 4 = 24 ----------
+    { van: "ANAM-002", naar: "AAND-001", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.hoog, interpretatie: "Kortdurende episodes passen bij BPPD" },
+    { van: "ANAM-002", naar: "AAND-002", polariteit: Polariteit.spreekt_tegen, gewicht: DiagnostischeWaarde.hoog, interpretatie: "Vestibulaire hypofunctie duurt dagen, niet seconden" },
+    { van: "ANAM-002", naar: "AAND-003", polariteit: Polariteit.spreekt_tegen, gewicht: DiagnostischeWaarde.matig, interpretatie: "PPPD is chronisch-aanhoudend, geen korte episodes" },
+    { van: "ANAM-002", naar: "AAND-004", polariteit: Polariteit.spreekt_tegen, gewicht: DiagnostischeWaarde.laag, interpretatie: "Chronisch/continu beeld, geen kenmerkende korte duur" },
+
+    { van: "SYMP-002", naar: "AAND-001", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.hoog, interpretatie: "Heftige rotatoire vertigo past bij BPPD" },
+    { van: "SYMP-002", naar: "AAND-002", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.matig, interpretatie: "Kan ook rotatoir zijn in acute fase — zwakkere discriminatie" },
+    { van: "SYMP-002", naar: "AAND-003", polariteit: Polariteit.spreekt_tegen, gewicht: DiagnostischeWaarde.matig, interpretatie: "PPPD kenmerkt zich juist door niet-vertigineuze klachten — onvastheid, zwaarte" },
+    { van: "SYMP-002", naar: "AAND-004", polariteit: Polariteit.spreekt_tegen, gewicht: DiagnostischeWaarde.matig, interpretatie: "Doorgaans vage onbalans, geen heftige rotatoire aanval" },
+
+    { van: "ANAM-003", naar: "AAND-001", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.hoog, interpretatie: "Houdingsuitlokking is kernkenmerk van BPPD" },
+    { van: "ANAM-003", naar: "AAND-002", polariteit: Polariteit.spreekt_tegen, gewicht: DiagnostischeWaarde.hoog, interpretatie: "Niet houdingsafhankelijk, continu" },
+    { van: "ANAM-003", naar: "AAND-003", polariteit: Polariteit.spreekt_tegen, gewicht: DiagnostischeWaarde.matig, interpretatie: "PPPD verergert wel bij beweging, maar als aanhoudende overgevoeligheid — ander mechanisme dan BPPD's korte provocatie" },
+    { van: "ANAM-003", naar: "AAND-004", polariteit: Polariteit.neutraal, interpretatie: "Geen kenmerkende houdingsuitlokking, ook geen duidelijke tegenspraak" },
+
+    { van: "ANAM-004", naar: "AAND-001", polariteit: Polariteit.neutraal, interpretatie: "Onderscheidt niet tussen de vier hoofditems — Tier 3-differentiator (o.a. Menière), zie objecttoelichting" },
+    { van: "ANAM-004", naar: "AAND-002", polariteit: Polariteit.neutraal, interpretatie: "Onderscheidt niet tussen de vier hoofditems — Tier 3-differentiator (o.a. Menière), zie objecttoelichting" },
+    { van: "ANAM-004", naar: "AAND-003", polariteit: Polariteit.neutraal, interpretatie: "Onderscheidt niet tussen de vier hoofditems — Tier 3-differentiator (o.a. Menière), zie objecttoelichting" },
+    { van: "ANAM-004", naar: "AAND-004", polariteit: Polariteit.neutraal, interpretatie: "Onderscheidt niet tussen de vier hoofditems — Tier 3-differentiator (o.a. Menière), zie objecttoelichting" },
+
+    { van: "ANAM-005", naar: "AAND-001", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.hoog, interpretatie: "Klachtenvrije intervallen passen bij BPPD" },
+    { van: "ANAM-005", naar: "AAND-002", polariteit: Polariteit.spreekt_tegen, gewicht: DiagnostischeWaarde.hoog, interpretatie: "Continu, geen klachtenvrije tussenpozen" },
+    { van: "ANAM-005", naar: "AAND-003", polariteit: Polariteit.spreekt_tegen, gewicht: DiagnostischeWaarde.hoog, interpretatie: "Per definitie chronisch aanwezig op de meeste dagen — kerncriterium" },
+    { van: "ANAM-005", naar: "AAND-004", polariteit: Polariteit.spreekt_tegen, gewicht: DiagnostischeWaarde.matig, interpretatie: "Chronisch/fluctuerend, geen scherpe klachtenvrije intervallen" },
+
+    { van: "ANAM-006", naar: "AAND-001", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.matig, interpretatie: "Recidiverend beloop past bij BPPD" },
+    { van: "ANAM-006", naar: "AAND-002", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor vestibulaire hypofunctie" },
+    { van: "ANAM-006", naar: "AAND-003", polariteit: Polariteit.spreekt_tegen, gewicht: DiagnostischeWaarde.laag, interpretatie: "Neutraal tot licht spreekt-tegen bij PPPD" },
+    { van: "ANAM-006", naar: "AAND-004", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend bij multifactoriële duizeligheid" },
+
+    // ---------------- Migratie 2: Vestibulaire hypofunctie (§14) — 7×4=28
+    { van: "ANAM-007", naar: "AAND-001", polariteit: Polariteit.spreekt_tegen, gewicht: DiagnostischeWaarde.hoog, interpretatie: "BPPD is aanvalsgewijs, niet continu" },
+    { van: "ANAM-007", naar: "AAND-002", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.hoog, interpretatie: "Continue duizeligheid past bij vestibulaire hypofunctie" },
+    { van: "ANAM-007", naar: "AAND-003", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.matig, interpretatie: "Zwak onderscheidend tussen de chronische aandoeningen onderling (addendum migratie 2, bevinding 2)" },
+    { van: "ANAM-007", naar: "AAND-004", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.matig, interpretatie: "Zwak onderscheidend tussen de chronische aandoeningen onderling (addendum migratie 2, bevinding 2)" },
+
+    { van: "ANAM-008", naar: "AAND-001", polariteit: Polariteit.spreekt_tegen, gewicht: DiagnostischeWaarde.hoog, interpretatie: "BPPD is juist houdingsafhankelijk" },
+    { van: "ANAM-008", naar: "AAND-002", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.matig, interpretatie: "Deels redundant met ANAM-007" },
+    { van: "ANAM-008", naar: "AAND-003", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor PPPD" },
+    { van: "ANAM-008", naar: "AAND-004", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend bij multifactoriële duizeligheid" },
+
+    { van: "SYMP-003", naar: "AAND-001", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.matig, kwalificatie: { fase: "acuut", lateraliteit: "unilateraal" }, interpretatie: "Overlap, zwakke discriminator — zelfde patroon als bij BPPD-migratie" },
+    { van: "SYMP-003", naar: "AAND-002", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.hoog, kwalificatie: { fase: "acuut", lateraliteit: "unilateraal" }, interpretatie: "Alleen bij deze kwalificatie" },
+    { van: "SYMP-003", naar: "AAND-003", polariteit: Polariteit.spreekt_tegen, gewicht: DiagnostischeWaarde.matig, kwalificatie: { fase: "acuut", lateraliteit: "unilateraal" }, interpretatie: "Past niet bij PPPD" },
+    { van: "SYMP-003", naar: "AAND-004", polariteit: Polariteit.spreekt_tegen, gewicht: DiagnostischeWaarde.matig, kwalificatie: { fase: "acuut", lateraliteit: "unilateraal" }, interpretatie: "Past niet bij multifactorieel beeld" },
+
+    { van: "ANAM-009", naar: "AAND-001", polariteit: Polariteit.neutraal, kwalificatie: { fase: "acuut" }, interpretatie: "Niet kenmerkend onderscheidend voor BPPD" },
+    { van: "ANAM-009", naar: "AAND-002", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.matig, kwalificatie: { fase: "acuut" }, interpretatie: "Alleen bij fase=acuut" },
+    { van: "ANAM-009", naar: "AAND-003", polariteit: Polariteit.spreekt_tegen, gewicht: DiagnostischeWaarde.laag, kwalificatie: { fase: "acuut" }, interpretatie: "Past niet goed bij PPPD" },
+    { van: "ANAM-009", naar: "AAND-004", polariteit: Polariteit.neutraal, kwalificatie: { fase: "acuut" }, interpretatie: "Niet kenmerkend onderscheidend bij multifactoriële duizeligheid" },
+
+    { van: "SYMP-004", naar: "AAND-001", polariteit: Polariteit.spreekt_tegen, gewicht: DiagnostischeWaarde.matig, kwalificatie: { fase: "chronisch" }, interpretatie: "Past niet bij BPPD" },
+    { van: "SYMP-004", naar: "AAND-002", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.hoog, kwalificatie: { fase: "chronisch" }, interpretatie: "Bij fase=chronisch" },
+    { van: "SYMP-004", naar: "AAND-003", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.matig, kwalificatie: { fase: "chronisch" }, interpretatie: "Zwak onderscheidend tussen de chronische aandoeningen onderling (addendum migratie 2, bevinding 2)" },
+    { van: "SYMP-004", naar: "AAND-004", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.matig, kwalificatie: { fase: "chronisch" }, interpretatie: "Zwak onderscheidend tussen de chronische aandoeningen onderling (addendum migratie 2, bevinding 2)" },
+
+    { van: "ANAM-010", naar: "AAND-001", polariteit: Polariteit.spreekt_tegen, gewicht: DiagnostischeWaarde.matig, kwalificatie: { lateraliteit: "bilateraal" }, interpretatie: "BPPD kent juist wel een vertigo-aanval" },
+    { van: "ANAM-010", naar: "AAND-002", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.matig, kwalificatie: { lateraliteit: "bilateraal" }, interpretatie: "Bij lateraliteit=bilateraal" },
+    { van: "ANAM-010", naar: "AAND-003", polariteit: Polariteit.neutraal, kwalificatie: { lateraliteit: "bilateraal" }, interpretatie: "Niet kenmerkend onderscheidend voor PPPD" },
+    { van: "ANAM-010", naar: "AAND-004", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.laag, kwalificatie: { lateraliteit: "bilateraal" }, interpretatie: "Lichte ondersteuning bij multifactorieel beeld" },
+
+    { van: "SYMP-005", naar: "AAND-001", polariteit: Polariteit.spreekt_tegen, gewicht: DiagnostischeWaarde.matig, kwalificatie: { lateraliteit: "bilateraal" }, interpretatie: "Past niet bij BPPD" },
+    { van: "SYMP-005", naar: "AAND-002", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.hoog, kwalificatie: { lateraliteit: "bilateraal" }, interpretatie: "Bij lateraliteit=bilateraal" },
+    { van: "SYMP-005", naar: "AAND-003", polariteit: Polariteit.neutraal, kwalificatie: { lateraliteit: "bilateraal" }, interpretatie: "Niet kenmerkend onderscheidend voor PPPD" },
+    { van: "SYMP-005", naar: "AAND-004", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.laag, kwalificatie: { lateraliteit: "bilateraal" }, interpretatie: "Lichte ondersteuning bij multifactorieel beeld" },
+
+    // ---------------- Migratie 3: PPPD (§15) — 6×4 + 2 extra (fase-split) = 26
+    { van: "ANAM-011", naar: "AAND-001", polariteit: Polariteit.spreekt_tegen, gewicht: DiagnostischeWaarde.hoog, interpretatie: "BPPD duurt geen 3 maanden aaneengesloten" },
+    { van: "ANAM-011", naar: "AAND-002", polariteit: Polariteit.spreekt_tegen, gewicht: DiagnostischeWaarde.hoog, kwalificatie: { fase: "acuut" }, interpretatie: "Acute fase duurt geen 3 maanden" },
+    { van: "ANAM-011", naar: "AAND-002", polariteit: Polariteit.neutraal, kwalificatie: { fase: "chronisch" }, interpretatie: "Overlap met chronische fase" },
+    { van: "ANAM-011", naar: "AAND-003", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.hoog, interpretatie: "Kerncriterium van PPPD (§8.1)" },
+    { van: "ANAM-011", naar: "AAND-004", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.matig, interpretatie: "Overlap, ook chronisch" },
+
+    { van: "SYMP-006", naar: "AAND-001", polariteit: Polariteit.spreekt_tegen, gewicht: DiagnostischeWaarde.hoog, interpretatie: "BPPD is juist vertigineus" },
+    { van: "SYMP-006", naar: "AAND-002", polariteit: Polariteit.spreekt_tegen, gewicht: DiagnostischeWaarde.matig, kwalificatie: { fase: "acuut" }, interpretatie: "Acute fase is juist vertigineus" },
+    { van: "SYMP-006", naar: "AAND-002", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.matig, kwalificatie: { fase: "chronisch" }, interpretatie: "Overlap, zelfde patroon als SYMP-004" },
+    { van: "SYMP-006", naar: "AAND-003", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.hoog, interpretatie: "Kernkenmerk van PPPD" },
+    { van: "SYMP-006", naar: "AAND-004", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.matig, interpretatie: "Overlap" },
+
+    { van: "ANAM-012", naar: "AAND-001", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor BPPD" },
+    { van: "ANAM-012", naar: "AAND-002", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor vestibulaire hypofunctie" },
+    { van: "ANAM-012", naar: "AAND-003", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.hoog, interpretatie: "Kenmerkende uitlokking bij PPPD" },
+    { van: "ANAM-012", naar: "AAND-004", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.matig, interpretatie: "Overlap — ook kenmerkend bij valrisico-beeld" },
+
+    { van: "ANAM-013", naar: "AAND-001", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor BPPD" },
+    { van: "ANAM-013", naar: "AAND-002", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor vestibulaire hypofunctie" },
+    { van: "ANAM-013", naar: "AAND-003", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.hoog, interpretatie: "Kenmerkende uitlokking bij PPPD" },
+    { van: "ANAM-013", naar: "AAND-004", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend bij multifactoriële duizeligheid" },
+
+    { van: "ANAM-014", naar: "AAND-001", polariteit: Polariteit.spreekt_tegen, gewicht: DiagnostischeWaarde.laag, interpretatie: "Niet kenmerkend voor BPPD" },
+    { van: "ANAM-014", naar: "AAND-002", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.laag, kwalificatie: { lateraliteit: "bilateraal" }, interpretatie: "Alleen lateraliteit=bilateraal, oscillopsie-gerelateerd" },
+    { van: "ANAM-014", naar: "AAND-003", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.hoog, interpretatie: "Scherp onderscheidende uitlokking bij PPPD (addendum migratie 3, aanbeveling)" },
+    { van: "ANAM-014", naar: "AAND-004", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend bij multifactoriële duizeligheid" },
+
+    { van: "ANAM-015", naar: "AAND-001", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor BPPD" },
+    { van: "ANAM-015", naar: "AAND-002", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor vestibulaire hypofunctie" },
+    { van: "ANAM-015", naar: "AAND-003", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.hoog, interpretatie: "Kenmerkend voor PPPD (vaak vervolgdiagnose na hersteld event)" },
+    { van: "ANAM-015", naar: "AAND-004", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend bij multifactoriële duizeligheid" },
+
+    // ---------------- Migratie 4: Multifactorieel/valrisico (§16) — 8×4=32
+    // Zie AANNAMES hierboven voor de vertaling addendum-FACTOR-nummering →
+    // echte §10-objecten (RF-004, TEST-003, FACTOR-005/006 omgewisseld).
+    { van: "FACTOR-001", naar: "AAND-001", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor BPPD" },
+    { van: "FACTOR-001", naar: "AAND-002", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor vestibulaire hypofunctie" },
+    { van: "FACTOR-001", naar: "AAND-003", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor PPPD" },
+    { van: "FACTOR-001", naar: "AAND-004", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.hoog, interpretatie: "Verminderde propriocepsis is een kernfactor bij multifactoriële duizeligheid" },
+
+    { van: "FACTOR-002", naar: "AAND-001", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor BPPD" },
+    { van: "FACTOR-002", naar: "AAND-002", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor vestibulaire hypofunctie" },
+    { van: "FACTOR-002", naar: "AAND-003", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor PPPD" },
+    { van: "FACTOR-002", naar: "AAND-004", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.hoog, interpretatie: "Spierzwakte is een kernfactor bij multifactoriële duizeligheid" },
+
+    { van: "FACTOR-003", naar: "AAND-001", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor BPPD" },
+    { van: "FACTOR-003", naar: "AAND-002", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor vestibulaire hypofunctie" },
+    { van: "FACTOR-003", naar: "AAND-003", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor PPPD — LET OP: dit is de objectieve visusachteruitgang, geen ANAM-014 (functionele visuele-prikkel-gevoeligheid), zie objecttoelichting ANAM-014" },
+    { van: "FACTOR-003", naar: "AAND-004", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.hoog, interpretatie: "Objectieve visusachteruitgang is een kernfactor bij multifactoriële duizeligheid" },
+
+    { van: "FACTOR-004", naar: "AAND-001", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor BPPD" },
+    { van: "FACTOR-004", naar: "AAND-002", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor vestibulaire hypofunctie" },
+    { van: "FACTOR-004", naar: "AAND-003", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor PPPD" },
+    { van: "FACTOR-004", naar: "AAND-004", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.hoog, interpretatie: "Polyfarmacie is een kernfactor bij multifactoriële duizeligheid" },
+
+    { van: "RF-004", naar: "AAND-001", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor BPPD" },
+    { van: "RF-004", naar: "AAND-002", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor vestibulaire hypofunctie" },
+    { van: "RF-004", naar: "AAND-003", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor PPPD" },
+    { van: "RF-004", naar: "AAND-004", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.hoog, interpretatie: "Orthostatische hypotensie is een kernfactor bij multifactoriële duizeligheid (addendum-'FACTOR-005', hergebruikt object §10)" },
+
+    { van: "TEST-003", naar: "AAND-001", polariteit: Polariteit.spreekt_tegen, gewicht: DiagnostischeWaarde.laag, interpretatie: "Niet kenmerkend voor BPPD" },
+    { van: "TEST-003", naar: "AAND-002", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.matig, interpretatie: "Overlap, met name bilateraal/geleidelijk (bevestigt de bestaande comorbide-differentiaaldiagnose-relatie, §14)" },
+    { van: "TEST-003", naar: "AAND-003", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor PPPD" },
+    { van: "TEST-003", naar: "AAND-004", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.hoog, interpretatie: "Milde vestibulaire achteruitgang is een kernfactor bij multifactoriële duizeligheid (addendum-'FACTOR-006', hergebruikt object §10)" },
+
+    { van: "FACTOR-006", naar: "AAND-001", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor BPPD" },
+    { van: "FACTOR-006", naar: "AAND-002", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor vestibulaire hypofunctie" },
+    { van: "FACTOR-006", naar: "AAND-003", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.laag, interpretatie: "Conceptuele overlap met bewegingsangst" },
+    { van: "FACTOR-006", naar: "AAND-004", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.hoog, interpretatie: "Valangst is een kernfactor bij multifactoriële duizeligheid (addendum-'FACTOR-007', echte id FACTOR-006, §10)" },
+
+    { van: "FACTOR-005", naar: "AAND-001", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor BPPD" },
+    { van: "FACTOR-005", naar: "AAND-002", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor vestibulaire hypofunctie" },
+    { van: "FACTOR-005", naar: "AAND-003", polariteit: Polariteit.neutraal, interpretatie: "Niet kenmerkend onderscheidend voor PPPD" },
+    { van: "FACTOR-005", naar: "AAND-004", polariteit: Polariteit.ondersteunt, gewicht: DiagnostischeWaarde.matig, interpretatie: "Signalerend, niet primair diagnostisch — al zo vastgelegd (§10); addendum-'FACTOR-008', echte id FACTOR-005" },
+  ];
+  for (const r of polariteitRelaties) {
+    await prisma.relatie.create({
+      data: {
+        id: nextRelatieId(),
+        vanObjectId: r.van,
+        naarObjectId: r.naar,
+        relatieType: RelatieType.bevinding_interpretatie,
+        polariteit: r.polariteit,
+        diagnostischeWaarde: r.gewicht,
+        kwalificatie: r.kwalificatie ? j(r.kwalificatie) : undefined,
+        interpretatie: r.interpretatie,
+        evidenceNiveau: EvidenceNiveau.consensus,
+      },
+    });
+  }
 
   const totalObjects = await prisma.knowledgeObject.count();
   const totalRelaties = await prisma.relatie.count();

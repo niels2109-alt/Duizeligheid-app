@@ -93,6 +93,19 @@ enum RelatieType {
   differentiaal
 }
 
+/// Requirements §11.1 (Clinical Reasoning Engine V2) — vult aan op het
+/// al bestaande diagnostischeWaarde-veld: polariteit stuurt de RICHTING
+/// (ondersteunt/spreekt-tegen/neutraal), diagnostischeWaarde blijft het
+/// GEWICHT (hoog/matig/laag) — samen sturen ze de V2-rangschikking.
+/// Alleen relevant op relatieType=bevinding_interpretatie-relaties; voor
+/// V1 ongebruikt (blijft null), dus geen enkele bestaande relatie hoeft
+/// aangepast te worden.
+enum Polariteit {
+  ondersteunt
+  spreekt_tegen
+  neutraal
+}
+
 enum DiagnostischeWaarde {
   hoog
   matig
@@ -215,6 +228,9 @@ model Relatie {
   patroonType              PatroonType?               @map("patroon_type")
   actietype                ActieType?
 
+  /// Requirements §11.1 (V2) — zie Polariteit-toelichting.
+  polariteit Polariteit?
+
   evidenceNiveau EvidenceNiveau? @map("evidence_niveau")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -294,6 +310,11 @@ model Sessie {
   episodeId String?          @map("episode_id")
   episode   Behandelepisode? @relation(fields: [episodeId], references: [id])
 
+  /// Requirements §11.1/§11.2 (V2): welke flow-logica deze sessie gebruikt.
+  /// Default v1 — bestaande en toekomstige V1-sessies blijven ongewijzigd
+  /// functioneren zonder dat er iets expliciet gezet hoeft te worden.
+  reasoningEngineVersie ReasoningEngineVersie @default(v1) @map("reasoning_engine_versie")
+
   stappen StapLog[]
 
   /// Versleutelde samenvattingstekst — pas gevuld bij export (§2.3), zodat
@@ -317,6 +338,14 @@ model Sessie {
 enum EpisodeStatus {
   actief
   afgesloten
+}
+
+/// Requirements §11.1/§11.2 — welke reasoning-flow-logica een Sessie
+/// gebruikt. V2 is een parallelle, schakelbare modus naast V1, geen
+/// vervanging (§11 toelichting).
+enum ReasoningEngineVersie {
+  v1
+  v2
 }
 
 /// Behandelepisode — requirements §8.4 (PPPD-aanvulling). Groepeert

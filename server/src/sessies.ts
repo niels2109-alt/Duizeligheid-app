@@ -9,7 +9,7 @@
  */
 
 import { Router, Request, Response } from "express";
-import { StapType } from "@prisma/client";
+import { StapType, ReasoningEngineVersie } from "@prisma/client";
 import { prisma } from "./prisma";
 import { requireAuth } from "./auth";
 import { encrypt, decrypt } from "./crypto";
@@ -36,15 +36,30 @@ function isEigenSessie(sessie: { therapeutId: string } | null, therapeutId?: str
 
 // ---------------------------------------------------------------------
 // POST /api/sessies — start een nieuwe sessie
+//
+// reasoningEngineVersie: optioneel, requirements §11.1/§11.2 (keuzescherm
+// "Snelle route"/"Brede verkenning"). Ontbreekt het veld (alle bestaande
+// V1-aanroepen), dan valt Prisma terug op het schema-default v1 — geen
+// enkele bestaande caller hoeft aangepast te worden.
 // ---------------------------------------------------------------------
 sessiesRouter.post("/", async (req: Request, res: Response) => {
+  const versieRaw = req.body?.reasoningEngineVersie;
+  const reasoningEngineVersie =
+    versieRaw === "v2" ? ReasoningEngineVersie.v2 : versieRaw === "v1" ? ReasoningEngineVersie.v1 : undefined;
+
   const sessie = await prisma.sessie.create({
     data: {
       therapeutId: req.therapeutId!,
       vervaltOp: new Date(Date.now() + NEGENTIG_DAGEN_MS),
+      ...(reasoningEngineVersie ? { reasoningEngineVersie } : {}),
     },
   });
-  res.status(201).json({ id: sessie.id, gestartOp: sessie.gestartOp, vervaltOp: sessie.vervaltOp });
+  res.status(201).json({
+    id: sessie.id,
+    gestartOp: sessie.gestartOp,
+    vervaltOp: sessie.vervaltOp,
+    reasoningEngineVersie: sessie.reasoningEngineVersie,
+  });
 });
 
 // ---------------------------------------------------------------------

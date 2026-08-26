@@ -14,6 +14,8 @@ import { TypeObject } from "@prisma/client";
 import { prisma } from "./prisma";
 import { parseRol, zichtbaarheidsFilter, isZichtbaarVoor } from "./visibility";
 import { parseJsonField } from "./serialize";
+import { haalAlleRodeVlaggenOp } from "./redFlags";
+import { haalSymptoomVocabulaireOp } from "./vocabulaire";
 import { flowRouter } from "./flow";
 import { authRouter } from "./auth";
 import { sessiesRouter } from "./sessies";
@@ -174,6 +176,31 @@ app.get("/api/objects/:id", async (req: Request<{ id: string }>, res: Response) 
     relatiesVanuit,
     relatiesNaartoe,
   });
+});
+
+// ---------------------------------------------------------------------
+// GET /api/rode-vlaggen — losstaande, herbruikbare rode-vlaggenmodule
+// (requirements §11.1/§11.4 stap 2). Aandoening-onafhankelijk, gegroepeerd
+// in klinische categorieën (zie server/src/redFlags.ts) — bedoeld voor de
+// toekomstige V2-flow ("altijd-actieve module aan het begin"); V1's eigen,
+// bestaande per-aandoening rode-vlag-logica in flow.ts blijft ongewijzigd
+// en gebruikt dit endpoint niet.
+// ---------------------------------------------------------------------
+app.get("/api/rode-vlaggen", async (req: Request, res: Response) => {
+  const rol = parseRol(req.query.rol);
+  const categorieen = await haalAlleRodeVlaggenOp(rol);
+  res.json({ categorieen });
+});
+
+// ---------------------------------------------------------------------
+// GET /api/v2/vocabulaire — gedeeld symptoomvocabulaire voor de V2-flow
+// (requirements §11.3 punt 1/§11.4 stap 4). V1 blijft dit endpoint volledig
+// negeren, gebruikt zoals altijd /api/flow/:aandoeningId.
+// ---------------------------------------------------------------------
+app.get("/api/v2/vocabulaire", async (req: Request, res: Response) => {
+  const rol = parseRol(req.query.rol);
+  const data = await haalSymptoomVocabulaireOp(rol);
+  res.json(data);
 });
 
 // ---------------------------------------------------------------------

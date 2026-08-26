@@ -139,11 +139,22 @@ flowRouter.get("/:aandoeningId", async (req: Request<{ aandoeningId: string }>, 
   // Bovenstaande dekt "AANDOENING -> TEST"-relaties, maar de daadwerkelijke
   // testbevindingen lopen andersom (TEST -> AANDOENING / TEST -> RF), dus
   // testen bepalen we via de relaties die NAAR deze aandoening toe wijzen.
+  //
+  // `polariteit: null` hier en bij `relatiesVanuit` hieronder is bewust: de
+  // §11-polariteit-relaties (Clinical Reasoning Engine V2) hergebruiken
+  // relatieType=bevinding_interpretatie op dezelfde objecten (o.a. TEST-003,
+  // dat nu ook naar AAND-001/003/004 wijst t.b.v. V2), maar horen NIET in
+  // deze V1-flow-bundel thuis — alleen V2-relaties hebben polariteit gezet
+  // (V1-relaties hebben dit veld altijd null, zie schema-toelichting).
+  // Zonder deze filter zou TEST-003 onterecht als nieuwe test bij BPPD/PPPD
+  // verschijnen, puur door de nieuwe §11-content — precies de wijziging in
+  // bestaande V1-functionaliteit die niet mag optreden.
   const testRelatiesNaarAandoening = await prisma.relatie.findMany({
     where: {
       naarObjectId: AANDOENING_ID,
       relatieType: "bevinding_interpretatie",
       vanObject: { typeObject: "onderzoekstest" },
+      polariteit: null,
     },
     select: { vanObjectId: true },
   });
@@ -151,7 +162,7 @@ flowRouter.get("/:aandoeningId", async (req: Request<{ aandoeningId: string }>, 
 
   const testObjecten = await prisma.knowledgeObject.findMany({
     where: { id: { in: Array.from(testIds) } },
-    include: { relatiesVanuit: { include: { naarObject: true } } },
+    include: { relatiesVanuit: { where: { polariteit: null }, include: { naarObject: true } } },
   });
   const testen = testObjecten.map((t) => ({
     id: t.id,
@@ -235,7 +246,10 @@ flowRouter.get("/:aandoeningId", async (req: Request<{ aandoeningId: string }>, 
   const factorIds = aggregatieRelaties.map((r) => r.vanObjectId);
   const [interventieRelatiesFactoren, signaleringRelatiesFactoren] = await Promise.all([
     prisma.relatie.findMany({
-      where: { vanObjectId: { in: factorIds }, relatieType: "bevinding_interpretatie" },
+      // polariteit: null — zie toelichting bij testRelatiesNaarAandoening
+      // hierboven; dezelfde §11-isolatie geldt hier voor FACTOR-xxx/RF-004/
+      // TEST-003, die nu ook §11-polariteit-relaties naar AAND-00X hebben.
+      where: { vanObjectId: { in: factorIds }, relatieType: "bevinding_interpretatie", polariteit: null },
       include: { naarObject: true },
     }),
     prisma.relatie.findMany({

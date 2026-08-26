@@ -14,8 +14,19 @@ async function json<T>(res: Response, fallbackError: string): Promise<T> {
   return res.json();
 }
 
-export async function startSessie(): Promise<{ id: string; gestartOp: string; vervaltOp: string }> {
-  const res = await fetch("/api/sessies", { method: "POST", credentials: "include" });
+// reasoningEngineVersie: optioneel (requirements §11.1/§11.2, keuzescherm)
+// — ongebruikt laten (V1's bestaande aanroep) geeft server-side het
+// schema-default v1, exact het bestaande gedrag.
+export async function startSessie(
+  reasoningEngineVersie?: "v1" | "v2"
+): Promise<{ id: string; gestartOp: string; vervaltOp: string; reasoningEngineVersie: string }> {
+  const res = await fetch("/api/sessies", {
+    method: "POST",
+    credentials: "include",
+    ...(reasoningEngineVersie
+      ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reasoningEngineVersie }) }
+      : {}),
+  });
   return json(res, "Kon sessie niet starten.");
 }
 

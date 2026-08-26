@@ -136,6 +136,31 @@
   margin-top: 8px;
 }
 
+/* --- V2: "geen dominante hypothese" (V2-ontwerp §14) — bewust NEUTRAAL
+   getint, geen danger-kleur: dit is een volwaardige uitkomst, geen
+   foutstatus. --- */
+.geen-dominante-hint {
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  margin-bottom: 12px;
+}
+
+/* --- V2: herweging-log (V2-ontwerp §13) — bewust platte tekstlijst, geen
+   balk/score-achtige weergave. --- */
+.herweging-log {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
 /* --- Anamnese / contra-indicatie-checklist --- */
 .anamnese-list {
   list-style: none;
@@ -687,10 +712,72 @@
   font-size: 0.95rem;
 }
 
+/* --- Rode-vlaggenmodule (requirements §11.1/§11.4 stap 2) — losstaand,
+   herbruikbaar component, nog niet gemonteerd in een bestaand scherm. --- */
+.rode-vlaggen-paneel {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+}
+
+.rode-vlaggen-paneel h3 {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+}
+
+.rode-vlag-categorie {
+  margin-bottom: 14px;
+}
+
+.rode-vlag-categorie h4 {
+  margin: 0 0 6px;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
+
+.rode-vlag-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rode-vlag-item {
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-left-color: var(--danger);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+}
+
+.rode-vlag-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.rode-vlag-naam {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.rode-vlag-kernbeschrijving {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
 @media print {
   .modus-tabs,
   .app-topbar,
   .hypothese-panel,
+  .rode-vlaggen-paneel,
   .flow-actions,
   .triage-opties,
   .anamnese-list,

@@ -6,6 +6,14 @@ interface Props {
   object: ObjectDetail | null;
   loading: boolean;
   onNavigate: (id: string) => void;
+  /**
+   * Bidirectionele kennisbank-koppeling — requirements §11.3 punt 5/V2-
+   * ontwerp §17: vanuit een kennisbankpagina de reasoning-flow (V2) starten
+   * met dit object als uitgangspunt. Optioneel: V1's bestaande gebruik van
+   * dit paneel (ook al vanuit Modus B bereikbaar) blijft ongewijzigd
+   * werken zonder deze prop mee te geven.
+   */
+  onStartFlow?: (object: ObjectDetail) => void;
 }
 
 function fmt(value: string | null | undefined): string {
@@ -172,7 +180,7 @@ function RelatiesBlok({
   );
 }
 
-export function ObjectDetailPanel({ object, loading, onNavigate }: Props) {
+export function ObjectDetailPanel({ object, loading, onNavigate, onStartFlow }: Props) {
   if (loading) {
     return (
       <div className="detail-panel">
@@ -200,6 +208,12 @@ export function ObjectDetailPanel({ object, loading, onNavigate }: Props) {
         <span className="badge status-badge">{fmt(object.status)}</span>
       </div>
       <h2>{naarBPPD(object.naam)}</h2>
+
+      {onStartFlow && (
+        <button type="button" className="link-button" onClick={() => onStartFlow(object)}>
+          → Start reasoning-flow (Brede verkenning) met dit als uitgangspunt
+        </button>
+      )}
 
       <p className="kernbeschrijving">{naarBPPD(object.kernbeschrijving)}</p>
 

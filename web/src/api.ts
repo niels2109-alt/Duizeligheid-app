@@ -1,4 +1,4 @@
-import type { ObjectDetail, ObjectSummary, Rol, TypeObject } from "./types";
+import type { ObjectDetail, ObjectSummary, Rol, RodeVlagCategorie, TypeObject } from "./types";
 import type { FlowData } from "./flow/types";
 
 export async function fetchMeta(): Promise<{ types: TypeObject[]; tiers: number[] }> {
@@ -38,5 +38,15 @@ export async function fetchObjectDetail(id: string, rol: Rol): Promise<ObjectDet
 export async function fetchFlowData(aandoeningId: string = "AAND-001"): Promise<FlowData> {
   const res = await fetch(`/api/flow/${encodeURIComponent(aandoeningId)}`);
   if (!res.ok) throw new Error("Kon reasoning-flow-data niet ophalen.");
+  return res.json();
+}
+
+// Requirements §11.1/§11.4 stap 2 — de losstaande, herbruikbare rode-
+// vlaggenmodule (server/src/redFlags.ts). Nog niet aangeroepen vanuit een
+// bestaand scherm (V1 blijft ongewijzigd); bedoeld voor de toekomstige
+// V2-flow (§11.4 stap 3+, "altijd-actieve module aan het begin").
+export async function fetchRodeVlaggen(rol: Rol): Promise<{ categorieen: RodeVlagCategorie[] }> {
+  const res = await fetch(`/api/rode-vlaggen?rol=${rol}`);
+  if (!res.ok) throw new Error("Kon rode vlaggen niet ophalen.");
   return res.json();
 }
