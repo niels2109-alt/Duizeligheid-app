@@ -21,13 +21,35 @@ export interface VocabulaireCategorie {
   items: VocabulaireItem[];
 }
 
+// Multifactorieel-uitbreiding (vervolg op §11-stap 7's bevinding): FACTOR-
+// 001 t/m 006/RF-004/TEST-003 (addendum migratie 4) — apart van de
+// symptoom-categorieën, zie server/src/vocabulaire.ts voor de toelichting.
+export interface RisicofactorItem extends VocabulaireItem {
+  typeObject: "prognostische_factor" | "red_flag" | "onderzoekstest";
+  /** Alleen relevant voor typeObject=red_flag (RF-004) — zie server/src/vocabulaire.ts. */
+  actietype: string | null;
+}
+
+// Requirements §8.1: sommige aandoeningen (PPPD) mogen pas als hypothese
+// getoond worden nadat aan een voorwaarde is voldaan — een harde gate, niet
+// alleen in V1 (server/src/flow.ts) maar nu ook hier in V2.
+export interface AandoeningVoorwaarde {
+  relatieId: string;
+  anamneseItemId: string;
+  anamneseItemNaam: string;
+  bevinding: string | null;
+  interpretatie: string | null;
+}
+
 export interface AandoeningInfo {
   id: string;
   naam: string;
+  voorwaarde: AandoeningVoorwaarde | null;
 }
 
 export interface VocabulaireData {
   categorieen: VocabulaireCategorie[];
+  risicofactoren: RisicofactorItem[];
   aandoeningen: AandoeningInfo[];
 }
 
@@ -60,4 +82,11 @@ export interface HypotheseRanking {
   tegensprekend: RangschikkingReden[];
   /** V2-ontwerp §10: cap toegepast omdat er minstens één hoog-gewicht spreekt-tegen kenmerk is. */
   geplafonneerd: boolean;
+  /**
+   * Requirements §8.1 — als niet-null én vervuld=false: deze hypothese mag
+   * (nog) niet getoond/meegewogen worden. weging/ondersteunend/tegensprekend
+   * zijn dan niet geëvalueerd (leeg/betekenisloos) — de UI moet in dat geval
+   * de gate tonen, niet de normale weging-badge.
+   */
+  voorwaarde: (AandoeningVoorwaarde & { vervuld: boolean }) | null;
 }

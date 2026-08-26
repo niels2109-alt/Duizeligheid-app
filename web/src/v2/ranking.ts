@@ -52,11 +52,34 @@ export function berekenRangschikking(
   vocabulaire: VocabulaireData,
   antwoorden: Record<string, boolean | undefined>,
   fase: Fase,
-  lateraliteit: Lateraliteit
+  lateraliteit: Lateraliteit,
+  voorwaardenBevestigd: Record<string, boolean> = {}
 ): HypotheseRanking[] {
-  const alleItems = vocabulaire.categorieen.flatMap((c) => c.items);
+  // Multifactorieel-uitbreiding: risicofactoren (FACTOR-xxx/RF-004/TEST-003)
+  // tellen op dezelfde manier mee als symptomen/anamnese-items — zelfde
+  // relatievorm (bevinding_interpretatie + polariteit + gewicht), dus geen
+  // aparte scoringslogica nodig, alleen een bredere itemlijst.
+  const alleItems = [...vocabulaire.categorieen.flatMap((c) => c.items), ...vocabulaire.risicofactoren];
 
   return vocabulaire.aandoeningen.map((aand) => {
+    // Requirements §8.1: een voorwaarde-gated aandoening (PPPD) mag niet als
+    // hypothese getoond/meegewogen worden totdat de voorwaarde is bevestigd
+    // — een harde gate, dus hier bewust NIETS evalueren (geen ondersteunend/
+    // tegensprekend, geen weging) zolang dat niet zo is. Dit is dezelfde gate
+    // als V1 (server/src/flow.ts), nu ook toegepast op V2's gelijktijdige
+    // rangschikking i.p.v. alleen op V1's sequentiële triage.
+    if (aand.voorwaarde && !voorwaardenBevestigd[aand.voorwaarde.relatieId]) {
+      return {
+        id: aand.id,
+        naam: aand.naam,
+        weging: "matig",
+        ondersteunend: [],
+        tegensprekend: [],
+        geplafonneerd: false,
+        voorwaarde: { ...aand.voorwaarde, vervuld: false },
+      };
+    }
+
     const ondersteunend: RangschikkingReden[] = [];
     const tegensprekend: RangschikkingReden[] = [];
 
@@ -89,7 +112,15 @@ export function berekenRangschikking(
       geplafonneerd = true;
     }
 
-    return { id: aand.id, naam: aand.naam, weging, ondersteunend, tegensprekend, geplafonneerd };
+    return {
+      id: aand.id,
+      naam: aand.naam,
+      weging,
+      ondersteunend,
+      tegensprekend,
+      geplafonneerd,
+      voorwaarde: aand.voorwaarde ? { ...aand.voorwaarde, vervuld: true } : null,
+    };
   });
 }
 
@@ -120,9 +151,10 @@ export function verklaring(r: HypotheseRanking): string {
 // Volwaardige, geaccepteerde uitkomst — geen foutstatus. Precies één "hoog"
 // betekent een duidelijke koploper; nul (nog niets overtuigend) of twee-of-
 // meer tegelijk (co-dominant, geen winnaar) betekenen allebei dat er nog
-// geen dominante hypothese is.
+// geen dominante hypothese is. Voorwaarde-gated hypothesen (§8.1) tellen
+// niet mee — die mogen nog niet als hypothese meedingen.
 export function geenDominanteHypothese(ranking: HypotheseRanking[]): boolean {
-  return ranking.filter((r) => r.weging === "hoog").length !== 1;
+  return ranking.filter((r) => !r.voorwaarde || r.voorwaarde.vervuld).filter((r) => r.weging === "hoog").length !== 1;
 }
 
 // --- Herweging-met-verklaring (V2-ontwerp §13, requirements §11.3 punt 4) ---
@@ -171,12 +203,18 @@ export function volgendeVraagSuggestie(
   ranking: HypotheseRanking[],
   antwoorden: Record<string, boolean | undefined>
 ): VocabulaireItem | null {
-  const clusterWegingen = ranking.filter((r) => CHRONISCH_CLUSTER.includes(r.id)).map((r) => r.weging);
-  // Alle drie gelijk staan is alleen "vastgelopen" als ze nog concurrerend
-  // zijn (matig/hoog) — alle drie op "laag" betekent juist dat ze correct
-  // en eensluidend zijn uitgesloten, geen ambiguïteit om op door te vragen.
+  // Voorwaarde-gated clusterleden (§8.1, PPPD) tellen niet mee — die mogen
+  // nog niet meedingen, dus "vastlopen" ertegenover is nog niet aan de orde.
+  const clusterWegingen = ranking
+    .filter((r) => CHRONISCH_CLUSTER.includes(r.id) && (!r.voorwaarde || r.voorwaarde.vervuld))
+    .map((r) => r.weging);
+  // Alle (overgebleven) leden gelijk staan is alleen "vastgelopen" als ze nog
+  // concurrerend zijn (matig/hoog) — allemaal op "laag" betekent juist dat
+  // ze correct en eensluidend zijn uitgesloten, geen ambiguïteit om op door
+  // te vragen. Bij minder dan twee overgebleven leden is er niets om tussen
+  // te onderscheiden.
   const uniekeWegingen = new Set(clusterWegingen);
-  const vastgelopen = uniekeWegingen.size === 1 && !uniekeWegingen.has("laag");
+  const vastgelopen = clusterWegingen.length >= 2 && uniekeWegingen.size === 1 && !uniekeWegingen.has("laag");
   if (!vastgelopen) return null;
 
   const alleItems = vocabulaire.categorieen.flatMap((c) => c.items);
