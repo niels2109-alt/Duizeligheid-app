@@ -76,6 +76,7 @@ import {
   RelatietypeDifferentiaal,
   ActieType,
   PatroonType,
+  BijdrageGewicht,
 } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -970,28 +971,242 @@ async function main() {
 
   await prisma.knowledgeObject.create({
     data: {
-      // Reserveert bewust de id die het referentiedocument (§19) al voor de
-      // toekomstige volledige uitwerking van dit item gebruikt.
       id: "AAND-004",
-      naam: "Multifactoriële duizeligheid met valrisico (stub)",
+      naam: "Multifactoriële duizeligheid met valrisico",
       typeObject: TypeObject.aandoening,
-      behandelverantwoordelijkheid: Behandelverantwoordelijkheid.zelfstandig_fysio,
+      // Referentiedocument §16: "gedeeld-multidisciplinair, per factor
+      // verschillend" — past hier zuiver op de bestaande enum-waarde
+      // (in tegenstelling tot PPPD's "zelfstandig fysio, met eventuele
+      // samenwerking"-nuance uit §8, die WEL een enum-fit-afweging vergde).
+      behandelverantwoordelijkheid: Behandelverantwoordelijkheid.gedeeld_multidisciplinair,
       behandeldiepte: Behandeldiepte.volledig,
-      tier: 1,
+      // Referentiedocument §16: "Tier: 2" — expliciet lager dan de drie
+      // eerdere Tier 1-items (BPPV/vestibulaire hypofunctie/PPPD). De stub
+      // had hier voorlopig tier:1 staan; nu gecorrigeerd naar de werkelijke
+      // brondocumentwaarde.
+      tier: 2,
+      // Requirements §10/referentiedocument §19: eerste item met
+      // uitkomsttype = samengesteld — stuurt de nieuwe flow-tak (stap 2).
+      uitkomsttype: Uitkomsttype.samengesteld,
       kernbeschrijving:
-        "STUB — vierde hoofditem uit het referentiedocument (§19). " +
-        "Samengesteld-uitkomsttype (meerdere onafhankelijke factoren, o.a. " +
-        "valrisico/orthostase), vereist de samengesteld-uitkomst-reasoning-" +
-        "flow-logica die pas bij de bouw van dit item zelf wordt " +
-        "toegevoegd — expliciet buiten scope van requirements §7.2 voor de " +
-        "huidige bouwstap. Evidence-niveau hier een voorzichtige " +
-        "placeholder, niet uit het brondocument overgenomen (net als bij " +
-        "STUB-VEST-MIGRAINE).",
+        "Optelsom van bijdragende factoren, geen dominante oorzaak — " +
+        "meerdere prognostische factoren (elk met een eigen bijdrage-" +
+        "gewicht) dragen gezamenlijk bij aan het duizeligheids-/" +
+        "valrisicobeeld, geen van allen op zichzelf noodzakelijk of " +
+        "voldoende (referentiedocument §16).",
+      // §16: "richtlijn per behandelcomponent..., consensus voor het geheel
+      // als syndroom" — net als bij PPPD's evidence-niveau-nuance wordt hier
+      // het niveau voor het geheel-als-syndroom aangehouden; de individuele
+      // interventies (INT-011/012) dragen zelf het sterkere richtlijn-niveau.
+      evidenceNiveau: EvidenceNiveau.consensus,
+      status: ObjectStatus.gepubliceerd,
+      laatstGecontroleerdOp: INGEVOERD_OP,
+      zichtbaarTherapeut: true,
+      zichtbaarPatient: true,
+    },
+  });
+
+  // --- FACTOR-001 t/m 006 (referentiedocument §16) --------------------------
+  // Acht bijdragende factoren totaal — zes als nieuw prognostische-factor-
+  // object hieronder, twee via letterlijk hergebruik van een bestaand object
+  // (RF-004 → orthostase, TEST-003 → milde vestibulaire achteruitgang, zie
+  // de aggregatie-relaties verderop) — geen dubbele FACTOR-wrapper omheen,
+  // om niets te dupliceren (expliciete controle-eis uit requirements §10.5).
+  //
+  // bijdrage_gewicht per factor: het brondocument geeft geen exacte
+  // per-factor-waarde, alleen dat elke factor "met een eigen gewicht"
+  // meeweegt. Hieronder een beargumenteerde, klinisch redelijke inschatting
+  // (spierzwakte/propriocepsis/evenwicht gelden in de valrisico-literatuur
+  // doorgaans als de sterkste modificeerbare voorspellers) — net als bij
+  // eerdere niet-expliciet-gespecificeerde evidence-niveaus hier transparant
+  // als aanname gemarkeerd, ter controle voorgelegd aan de opdrachtgever.
+  const factoren = [
+    {
+      id: "FACTOR-001",
+      naam: "Verminderde propriocepsis",
+      kernbeschrijving:
+        "Verminderd gevoel voor gewrichtsstand/-beweging in voeten/enkels, " +
+        "draagt bij aan balansverlies en valrisico — vaak leeftijdsgebonden " +
+        "of bij perifere neuropathie.",
+    },
+    {
+      id: "FACTOR-002",
+      naam: "Spierzwakte (onderste extremiteiten)",
+      kernbeschrijving:
+        "Verminderde kracht in been-/heupspieren, beperkt het vermogen om " +
+        "een dreigende val te corrigeren.",
+    },
+    {
+      id: "FACTOR-003",
+      naam: "Visusproblemen",
+      kernbeschrijving:
+        "Verminderd gezichtsvermogen (bijv. cataract, verouderde bril) " +
+        "vermindert visuele compensatie van evenwichtsverlies.",
+    },
+    {
+      id: "FACTOR-004",
+      naam: "Polyfarmacie",
+      kernbeschrijving:
+        "Meerdere gelijktijdig gebruikte medicijnen (met name sedativa, " +
+        "bloeddrukverlagers, psychofarmaca) kunnen duizeligheid/valrisico " +
+        "verhogen, los van de onderliggende duizeligheidsoorzaak.",
+    },
+    {
+      id: "FACTOR-005",
+      naam: "Cognitieve beperking",
+      kernbeschrijving:
+        "Verminderd vermogen om aandacht te verdelen tussen lopen en " +
+        "andere taken (dual-tasking), verhoogt valrisico bij complexe " +
+        "omgevingen.",
+    },
+    {
+      id: "FACTOR-006",
+      naam: "Valangst",
+      kernbeschrijving:
+        "Angst om te vallen leidt tot bewegingsvermijding, wat de " +
+        "onderliggende factoren (spierzwakte, balans) juist verder " +
+        "verslechtert — een zichzelf versterkend patroon, vergelijkbaar " +
+        "met de bewegingsangst-dynamiek bij PPPD (referentiedocument §15).",
+    },
+  ];
+  for (const f of factoren) {
+    await prisma.knowledgeObject.create({
+      data: {
+        id: f.id,
+        naam: f.naam,
+        typeObject: TypeObject.prognostische_factor,
+        kernbeschrijving: f.kernbeschrijving,
+        evidenceNiveau: EvidenceNiveau.consensus,
+        status: ObjectStatus.gepubliceerd,
+        laatstGecontroleerdOp: INGEVOERD_OP,
+        zichtbaarTherapeut: true,
+        zichtbaarPatient: true,
+      },
+    });
+  }
+
+  // --- INT-011 t/m 013 (referentiedocument §16) ------------------------------
+  await prisma.knowledgeObject.create({
+    data: {
+      id: "INT-011",
+      naam: "Balanstraining",
+      typeObject: TypeObject.interventie,
+      kernbeschrijving:
+        "Oefentherapie gericht op statisch/dynamisch evenwicht — " +
+        "geïndiceerd bij verminderde propriocepsis.",
+      evidenceNiveau: EvidenceNiveau.richtlijn,
+      status: ObjectStatus.gepubliceerd,
+      laatstGecontroleerdOp: INGEVOERD_OP,
+      zichtbaarTherapeut: true,
+      zichtbaarPatient: true,
+    },
+  });
+  await prisma.knowledgeObject.create({
+    data: {
+      id: "INT-012",
+      naam: "Krachttraining",
+      typeObject: TypeObject.interventie,
+      // §16: "sterkst onderbouwd van alle interventies in dit document".
+      kernbeschrijving:
+        "Progressieve krachttraining van been-/heupspieren — sterkst " +
+        "onderbouwde interventie in deze kennisbank, geïndiceerd bij " +
+        "spierzwakte.",
+      evidenceNiveau: EvidenceNiveau.richtlijn,
+      status: ObjectStatus.gepubliceerd,
+      laatstGecontroleerdOp: INGEVOERD_OP,
+      zichtbaarTherapeut: true,
+      zichtbaarPatient: true,
+    },
+  });
+  await prisma.knowledgeObject.create({
+    data: {
+      id: "INT-013",
+      naam: "Graduele blootstelling bij valangst",
+      typeObject: TypeObject.interventie,
+      // §16: "inhoudelijk sterk vergelijkbaar met INT-008/PPPD — bewust
+      // niet geconsolideerd, zie §18" — dus welbewust een apart object,
+      // geen hergebruik van INT-008 ondanks de gelijkenis.
+      kernbeschrijving:
+        "Graduele blootstelling aan vermeden bewegingen/situaties bij " +
+        "valangst — inhoudelijk sterk vergelijkbaar met INT-008 " +
+        "(Exposure-training, PPPD), bewust niet met dat object " +
+        "geconsolideerd tot één generiek object (referentiedocument §18: " +
+        "onvoldoende precedent voor die generalisatie).",
+      evidenceNiveau: EvidenceNiveau.observationeel,
+      status: ObjectStatus.gepubliceerd,
+      laatstGecontroleerdOp: INGEVOERD_OP,
+      zichtbaarTherapeut: true,
+      zichtbaarPatient: true,
+    },
+  });
+
+  // --- RF-013 (referentiedocument §16, follow-up-signaal) -------------------
+  await prisma.knowledgeObject.create({
+    data: {
+      id: "RF-013",
+      naam: "Afwijkend multifactorieel beloop",
+      typeObject: TypeObject.red_flag,
+      kernbeschrijving:
+        "Patroon wijkt af van verwacht multifactorieel beloop (bijv. " +
+        "snelle acute verslechtering i.p.v. geleidelijke verandering) → " +
+        "heroverweeg de hypothese.",
+      evidenceNiveau: EvidenceNiveau.consensus,
+      status: ObjectStatus.gepubliceerd,
+      laatstGecontroleerdOp: INGEVOERD_OP,
+      zichtbaarTherapeut: true,
+      zichtbaarPatient: true,
+    },
+  });
+
+  // --- EDU-004 (referentiedocument §16, requirements §10.4) -----------------
+  // Eerste écht gebruikte gepersonaliseerd-samengestelde educatie
+  // (samengesteld: true) — het mechanisme in src/ai.ts (GET
+  // /api/ai/educatie/:id) stond hier al generiek op voorbereid. Vast deel in
+  // kernbeschrijving/verwachtingsmanagement; variabel deel = per bevestigde
+  // factor een eigen content-blok (zie signaleringObjectIds hieronder —
+  // src/ai.ts filtert die op de daadwerkelijk bevestigde factoren, §10.4/§20).
+  //
+  // Bewuste keuze: TEST-003 (het hergebruikte object voor "milde vestibulaire
+  // achteruitgang") staat NIET in signaleringObjectIds — de kernbeschrijving
+  // van TEST-003 is klinisch/methodologisch geschreven (testuitvoering, "LET
+  // OP — omgekeerde logica..."), niet patiëntgericht, en zou als variabel
+  // content-blok verwarrend zijn. De overige zeven factor-bronnen (zes
+  // FACTOR-objecten + RF-004) hebben wel patiëntgerichte tekst.
+  await prisma.knowledgeObject.create({
+    data: {
+      id: "EDU-004",
+      naam: "Patiënteducatie multifactoriële duizeligheid/valrisico",
+      typeObject: TypeObject.patienteducatie_item,
+      kernbeschrijving:
+        "Patiëntgerichte uitleg over multifactoriële duizeligheid met " +
+        "valrisico: erkenning dat er niet één simpele oorzaak is, " +
+        "kernboodschap dat bewegen/kracht/balans het valrisico aantoonbaar " +
+        "verkleint, en uitleg waarom meerdere zorgverleners betrokken " +
+        "kunnen zijn (referentiedocument §16).",
       evidenceNiveau: EvidenceNiveau.consensus,
       status: ObjectStatus.concept,
       laatstGecontroleerdOp: INGEVOERD_OP,
       zichtbaarTherapeut: true,
       zichtbaarPatient: true,
+    },
+  });
+  await prisma.patientEducatieObject.create({
+    data: {
+      id: "EDU-004-PEO",
+      knowledgeObjectId: "EDU-004",
+      verwachtingsmanagement:
+        "Verbetering verloopt geleidelijk en per factor verschillend — " +
+        "niet elke factor hoeft even snel te verbeteren, en niet elke " +
+        "factor wordt door de fysiotherapeut zelf behandeld.",
+      // Rationale-uitleg-element (uit PPPD, §15) hier hergebruikt bij
+      // valangst — bevestigt de generieke status van dit element (§16).
+      rationaleUitlegCounterintuitief:
+        "Bewegen ondanks angst om te vallen voelt tegenstrijdig, maar juist " +
+        "stilzitten uit angst verzwakt de spieren en het evenwicht verder " +
+        "— wat het valrisico op termijn juist vergroot.",
+      samengesteld: true,
+      bronObjectIds: j(["AAND-004"]),
+      signaleringObjectIds: j(["FACTOR-001", "FACTOR-002", "FACTOR-003", "FACTOR-004", "FACTOR-005", "FACTOR-006", "RF-004"]),
     },
   });
 
@@ -1685,6 +1900,136 @@ async function main() {
       },
     });
   }
+
+  // =====================================================================
+  // RELATIES — AAND-004 (Multifactoriële duizeligheid met valrisico),
+  // referentiedocument §16, requirements §10
+  // =====================================================================
+
+  // --- Aggregatie-relaties: FACTOR-xxx (+ hergebruikte RF-004/TEST-003) →
+  // AAND-004 (§10.1) — eerste echte gebruik van relatieType = aggregatie.
+  // Elke factor draagt met een eigen bijdrage_gewicht bij, geen van allen
+  // op zichzelf noodzakelijk of voldoende (§16). Zie de aannametoelichting
+  // bij de FACTOR-objecten hierboven voor de bijdrage_gewicht-inschatting.
+  const aggregatieFactoren: Array<{ van: string; gewicht: BijdrageGewicht; bevinding: string }> = [
+    { van: "FACTOR-001", gewicht: BijdrageGewicht.hoog, bevinding: "Verminderde propriocepsis vastgesteld" },
+    { van: "FACTOR-002", gewicht: BijdrageGewicht.hoog, bevinding: "Spierzwakte (onderste extremiteiten) vastgesteld" },
+    { van: "FACTOR-003", gewicht: BijdrageGewicht.matig_hoog, bevinding: "Visusprobleem vastgesteld" },
+    { van: "FACTOR-004", gewicht: BijdrageGewicht.matig, bevinding: "Polyfarmacie vastgesteld" },
+    { van: "FACTOR-005", gewicht: BijdrageGewicht.matig, bevinding: "Cognitieve beperking vastgesteld" },
+    { van: "FACTOR-006", gewicht: BijdrageGewicht.matig_hoog, bevinding: "Valangst vastgesteld" },
+    // Hergebruikte objecten (§16: "concreet bewijs voor herbruikbaarheid van
+    // het generieke model tussen items") — geen nieuwe FACTOR-wrapper.
+    { van: "RF-004", gewicht: BijdrageGewicht.matig, bevinding: "Orthostatisch/cardiaal beeld vastgesteld" },
+    { van: "TEST-003", gewicht: BijdrageGewicht.matig_hoog, bevinding: "Milde vestibulaire achteruitgang vastgesteld (HIT)" },
+  ];
+  for (const f of aggregatieFactoren) {
+    await prisma.relatie.create({
+      data: {
+        id: nextRelatieId(),
+        vanObjectId: f.van,
+        naarObjectId: "AAND-004",
+        relatieType: RelatieType.aggregatie,
+        bevinding: f.bevinding,
+        interpretatie: "Draagt bij aan het multifactoriële duizeligheids-/valrisicobeeld",
+        bijdrageGewicht: f.gewicht,
+        evidenceNiveau: EvidenceNiveau.consensus,
+      },
+    });
+  }
+
+  // --- Interventie-indicaties: fysio-behandelde factoren → INT-xxx (§16) —
+  // hergebruikt relatieType = bevinding_interpretatie, zelfde patroon als
+  // overal elders (zie modelleringsbeslissingen bovenaan dit bestand).
+  // TEST-003 → INT-006: hergebruik van een bestaande vestibulaire-
+  // hypofunctie-interventie (adaptatie/gaze-stability) — de indicatie-
+  // relatie krijgt bewust geen kwalificatie (fase-as is hier niet van
+  // toepassing), komt dus terecht als een derde, ongeclausuleerde
+  // indicatieKwalificaties-entry naast INT-006's twee bestaande
+  // fase-gekwalificeerde relaties (§7.1) — geen conflict, .some()-matching
+  // blijft correct voor beide contexten.
+  const interventieFactoren: Array<{ van: string; naar: string; bevinding: string; interpretatie: string }> = [
+    { van: "FACTOR-001", naar: "INT-011", bevinding: "Verminderde propriocepsis vastgesteld", interpretatie: "Balanstraining geïndiceerd" },
+    { van: "FACTOR-002", naar: "INT-012", bevinding: "Spierzwakte (onderste extremiteiten) vastgesteld", interpretatie: "Krachttraining geïndiceerd" },
+    { van: "FACTOR-006", naar: "INT-013", bevinding: "Valangst vastgesteld", interpretatie: "Graduele blootstelling geïndiceerd" },
+    { van: "TEST-003", naar: "INT-006", bevinding: "Milde vestibulaire achteruitgang vastgesteld (HIT)", interpretatie: "Adaptatie/gaze-stability-training geïndiceerd" },
+  ];
+  for (const i of interventieFactoren) {
+    await prisma.relatie.create({
+      data: {
+        id: nextRelatieId(),
+        vanObjectId: i.van,
+        naarObjectId: i.naar,
+        relatieType: RelatieType.bevinding_interpretatie,
+        bevinding: i.bevinding,
+        interpretatie: i.interpretatie,
+        evidenceNiveau: EvidenceNiveau.consensus,
+      },
+    });
+  }
+
+  // --- Signalering-opvolging: extern-behandelde factoren (§10.2) — eerste
+  // echte gebruik van relatieType = signalering_opvolging. Bewust geen
+  // geautomatiseerde koppeling (§4 buiten scope) — alleen de relatie die
+  // vastlegt wélke externe opvolging relevant is; het daadwerkelijke
+  // vraag-antwoord-veld ("wel/niet/nog niet gebeurd") zit in de follow-up-UI
+  // (stap 3), niet in dit datamodel.
+  const signaleringFactoren: Array<{ van: string; bevinding: string; interpretatie: string }> = [
+    { van: "FACTOR-003", bevinding: "Visusprobleem vastgesteld", interpretatie: "Extern navragen: oogarts-/optometristcontrole" },
+    { van: "FACTOR-004", bevinding: "Polyfarmacie vastgesteld", interpretatie: "Extern navragen: medicatiereview met huisarts" },
+    { van: "FACTOR-005", bevinding: "Cognitieve beperking vastgesteld", interpretatie: "Extern navragen: cognitieve screening/opvolging" },
+    { van: "RF-004", bevinding: "Orthostatisch/cardiaal beeld vastgesteld", interpretatie: "Extern navragen: cardiovasculaire opvolging bij huisarts" },
+  ];
+  for (const s of signaleringFactoren) {
+    await prisma.relatie.create({
+      data: {
+        id: nextRelatieId(),
+        vanObjectId: s.van,
+        naarObjectId: "AAND-004",
+        relatieType: RelatieType.signalering_opvolging,
+        bevinding: s.bevinding,
+        interpretatie: s.interpretatie,
+        actietype: ActieType.samenwerking_adviseren,
+        evidenceNiveau: EvidenceNiveau.consensus,
+      },
+    });
+  }
+
+  // --- AAND-004 → RF-004 (rode-vlag-interrupt, letterlijk hergebruikt) ------
+  // "Red-flag-interrupt-logica blijft ongewijzigd op beide typen van
+  // toepassing" (§19) — dezelfde acute-verwijs-gate als bij BPPD, nu ook
+  // vanuit AAND-004's eigen anamnese bereikbaar (naast de aggregatie- en
+  // signalering-relaties hierboven, die een andere, niet-acute rol van
+  // hetzelfde object vastleggen).
+  await prisma.relatie.create({
+    data: {
+      id: nextRelatieId(),
+      vanObjectId: "AAND-004",
+      naarObjectId: "RF-004",
+      relatieType: RelatieType.bevinding_interpretatie,
+      bevinding: "Sterke bloeddrukdaling bij houdingsverandering, syncope, palpitaties, pijn op de borst",
+      interpretatie: "Orthostatisch/cardiaal",
+      actietype: ActieType.acuut_verwijzen,
+      evidenceNiveau: EvidenceNiveau.richtlijn,
+    },
+  });
+
+  // --- AAND-004 → RF-013 (follow-up-patroonsignaal, §10.3) ------------------
+  // Zelfde patroon als AAND-002 → RF-008 (§7.3/§18: patroonType vast
+  // onderdeel van elke follow-up-relatie).
+  await prisma.relatie.create({
+    data: {
+      id: nextRelatieId(),
+      vanObjectId: "AAND-004",
+      naarObjectId: "RF-013",
+      relatieType: RelatieType.bevinding_interpretatie,
+      bevinding: "Snelle acute verslechtering i.p.v. geleidelijke verandering",
+      interpretatie: "Wijkt af van verwacht multifactorieel beloop",
+      actietype: ActieType.hypothese_heroverwegen,
+      patroonType: PatroonType.afwijkend_beloop,
+      evidenceNiveau: EvidenceNiveau.consensus,
+    },
+  });
 
   const totalObjects = await prisma.knowledgeObject.count();
   const totalRelaties = await prisma.relatie.count();

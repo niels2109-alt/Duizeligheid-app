@@ -221,6 +221,56 @@ flowRouter.get("/:aandoeningId", async (req: Request<{ aandoeningId: string }>, 
     };
   });
 
+  // --- Factoren (requirements §10.1, alleen bij uitkomsttype=samengesteld):
+  // elk FACTOR-xxx-object (of hergebruikt object, bijv. RF-004/TEST-003) met
+  // een aggregatie-relatie naar deze aandoening, met zijn bijdrage_gewicht,
+  // gekoppelde interventie (fysio zelf) of signalering-opvolging (extern) —
+  // §10.1: "geen hoofdhypothese maar een factorenprofiel". Datagedreven op
+  // relatieType=aggregatie, niet op AAND-004's id — elk toekomstig
+  // samengesteld-item werkt hierdoor automatisch mee.
+  const aggregatieRelaties = await prisma.relatie.findMany({
+    where: { naarObjectId: AANDOENING_ID, relatieType: "aggregatie" },
+    include: { vanObject: true },
+  });
+  const factorIds = aggregatieRelaties.map((r) => r.vanObjectId);
+  const [interventieRelatiesFactoren, signaleringRelatiesFactoren] = await Promise.all([
+    prisma.relatie.findMany({
+      where: { vanObjectId: { in: factorIds }, relatieType: "bevinding_interpretatie" },
+      include: { naarObject: true },
+    }),
+    prisma.relatie.findMany({
+      where: { vanObjectId: { in: factorIds }, naarObjectId: AANDOENING_ID, relatieType: "signalering_opvolging" },
+    }),
+  ]);
+  const factoren = aggregatieRelaties.map((agg) => {
+    const interventieRel = interventieRelatiesFactoren.find(
+      (r) => r.vanObjectId === agg.vanObjectId && r.naarObject.typeObject === "interventie"
+    );
+    const signaleringRel = signaleringRelatiesFactoren.find((r) => r.vanObjectId === agg.vanObjectId);
+    return {
+      id: agg.vanObjectId,
+      naam: agg.vanObject.naam,
+      kernbeschrijving: agg.vanObject.kernbeschrijving,
+      bijdrageGewicht: agg.bijdrageGewicht,
+      bevinding: agg.bevinding,
+      // Requirements §10.1 ("elk met eigen screening"): een hergebruikt
+      // red-flag-object (RF-004) wordt al via de bestaande anamneseChecks-
+      // stap uitgevraagd (interrupt-pad blijft ongewijzigd, §19) — geen
+      // aparte factor-vraag ervoor, de frontend leest de bevestiging uit de
+      // anamnese-antwoorden i.p.v. een eigen toggle te tonen.
+      viaAnamnese: agg.vanObject.typeObject === "red_flag",
+      interventie: interventieRel
+        ? {
+            id: interventieRel.naarObjectId,
+            naam: interventieRel.naarObject.naam,
+            kernbeschrijving: interventieRel.naarObject.kernbeschrijving,
+            evidenceNiveau: interventieRel.naarObject.evidenceNiveau,
+          }
+        : null,
+      signalering: signaleringRel ? { interpretatie: signaleringRel.interpretatie } : null,
+    };
+  });
+
   // --- Patiënteducatie: het patiënteducatie-item wiens bron_object_ids deze
   // aandoening bevat (geen aparte Relatie-rij hiervoor, zie EDU-001/EDU-002
   // in seed.ts) --------------------------------------------------------------
@@ -272,12 +322,19 @@ flowRouter.get("/:aandoeningId", async (req: Request<{ aandoeningId: string }>, 
             interpretatie: eigenVoorwaarde.interpretatie,
           }
         : null,
-      vereistEpisodeTrend: eigenVoorwaarde !== null,
+      // Requirements §10.3: "Hergebruik Behandelepisode (§8.4)" — het
+      // samengesteld-type profiteert van dezelfde episode-structuur als
+      // PPPD (per-factor-voortgang over meerdere sessies volgen), dus de
+      // trendmatige follow-up geldt nu voor BEIDE gevallen: een voorwaarde-
+      // gated item (PPPD) óf een samengesteld-type item (AAND-004) —
+      // datagedreven op uitkomsttype, niet op een specifiek item-id.
+      vereistEpisodeTrend: eigenVoorwaarde !== null || aandoening.uitkomsttype === "samengesteld",
     },
     differentialen,
     anamneseChecks,
     testen,
     interventies,
+    factoren,
     educatie,
   });
 });

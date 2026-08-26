@@ -631,6 +631,34 @@
   letter-spacing: 0.03em;
 }
 
+/* --- Factorenoverzicht: samengesteld-type (requirements §10.1) --- */
+.factoren-tabel-wrap {
+  overflow-x: auto;
+}
+
+.factoren-tabel {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin-top: 10px;
+}
+
+.factoren-tabel th,
+.factoren-tabel td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.factoren-tabel th {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
 /* --- Sessies-overzicht --- */
 .sessies-list {
   list-style: none;

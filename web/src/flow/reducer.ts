@@ -19,6 +19,7 @@ export const initialFlowState: FlowState = {
   bevestigdeKwalificatie: null,
   hypotheseBevestigd: false,
   gekozenFase: null,
+  factorAntwoorden: {},
   gekozenInterventieId: null,
   contraIndicatieAntwoorden: {},
   eduVrijgegeven: false,
@@ -31,6 +32,8 @@ export const initialFlowState: FlowState = {
     npqScore: null,
     patroonType: null,
     notitie: null,
+    signaleringAntwoorden: {},
+    factorVoortgang: {},
   },
 };
 
@@ -283,8 +286,62 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
       };
     }
 
+    // Requirements §10.1: bij uitkomsttype=samengesteld vervangt de factor-
+    // screening-stap de test-select-stap — fase 1/2 (triage/anamnese)
+    // blijven ongewijzigd (§19: "flow-fasen zelf ongewijzigd"), alleen fase
+    // 3 vertakt hier voor het eerst op uitkomsttype.
     case "GA_NAAR_TESTSELECTIE":
-      return { ...state, stap: "test-select" };
+      return { ...state, stap: state.flow?.aandoening.uitkomsttype === "samengesteld" ? "factor-screening" : "test-select" };
+
+    // Requirements §10.1: NOOIT een stap-overgang hier — dit is precies het
+    // verschil met KIES_BEVINDING (dat wél naar test-interpretatie
+    // springt): de flow moet doorscreenen tot alle factoren beantwoord
+    // zijn, niet stoppen bij de eerste bevestigde.
+    case "FACTOR_ANTWOORD": {
+      if (!state.flow) return state;
+      const factor = state.flow.factoren.find((f) => f.id === action.factorId);
+      let trail = state.trail;
+      if (factor && action.aanwezig) {
+        trail = [
+          ...trail,
+          trailEntry(
+            "Factorenscreening",
+            "test",
+            `${factor.bevinding ?? factor.naam} (bijdrage: ${factor.bijdrageGewicht}).`,
+            [factor.id],
+            null
+          ),
+        ];
+      }
+      return {
+        ...state,
+        factorAntwoorden: { ...state.factorAntwoorden, [action.factorId]: action.aanwezig },
+        trail,
+      };
+    }
+
+    case "GA_NAAR_FACTOR_OVERZICHT": {
+      if (!state.flow) return state;
+      const bevestigd = state.flow.factoren.filter((f) =>
+        f.viaAnamnese ? state.anamneseAntwoorden[f.id] === true : state.factorAntwoorden[f.id] === true
+      );
+      return {
+        ...state,
+        stap: "factor-overzicht",
+        trail: [
+          ...state.trail,
+          trailEntry(
+            "Factorenoverzicht",
+            "interpretatie",
+            bevestigd.length > 0
+              ? `Bevestigd factorenprofiel (${bevestigd.length}): ${bevestigd.map((f) => f.naam).join(", ")}.`
+              : "Geen van de gescreende factoren bevestigd.",
+            bevestigd.map((f) => f.id),
+            null
+          ),
+        ],
+      };
+    }
 
     case "KIES_TEST": {
       const test = state.flow?.testen.find((t) => t.id === action.testId);
@@ -369,6 +426,55 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
 
     case "GA_NAAR_BEHANDELSTRATEGIE":
       return { ...state, stap: "behandelstrategie" };
+
+    // Requirements §10.1: alleen gebruikt door de samengesteld-tak —
+    // factor-overzicht IS al de fase-4/5-output, geen aparte
+    // contra-indicatie-/interventiekeuze-stap zoals bij enkelvoudige items.
+    case "GA_NAAR_EDUCATIE":
+      return { ...state, stap: "educatie" };
+
+    // Requirements §10.2: "ja/nee/nog niet" per extern-behandelde factor —
+    // geen automatische test/hertest. Elke keuze is zijn eigen trail-entry
+    // (zelfde patroon als de andere follow-up-lussen: nooit samengevoegd
+    // tot één oordeel).
+    case "SIGNALERING_ANTWOORD": {
+      const factor = state.flow?.factoren.find((f) => f.id === action.factorId);
+      const label = action.waarde === "ja" ? "gebeurd" : action.waarde === "nee" ? "niet gebeurd" : "nog niet gebeurd";
+      const tekst = `${factor?.signalering?.interpretatie ?? factor?.naam ?? action.factorId} — ${label}.`;
+      return {
+        ...state,
+        followup: {
+          ...state.followup,
+          signaleringAntwoorden: { ...state.followup.signaleringAntwoorden, [action.factorId]: action.waarde },
+        },
+        trail: [...state.trail, trailEntry("Follow-up", "followup", tekst, [action.factorId], null)],
+      };
+    }
+
+    // Requirements §10.3: patroon_type (uit PPPD, §18 generiek) hier op
+    // per-factor-niveau — verwachte fluctuatie/afwijkend beloop per
+    // fysio-behandelde factor, los van de andere factoren (nooit
+    // samengevoegd tot één oordeel, zelfde principe als de andere
+    // follow-up-lussen).
+    case "FACTOR_VOORTGANG": {
+      const factor = state.flow?.factoren.find((f) => f.id === action.factorId);
+      const label = action.waarde === "verwachte_fluctuatie" ? "verwachte fluctuatie" : "afwijkend beloop";
+      const tekst = `${factor?.naam ?? action.factorId} — beloop: ${label}.`;
+      return {
+        ...state,
+        followup: {
+          ...state.followup,
+          factorVoortgang: { ...state.followup.factorVoortgang, [action.factorId]: action.waarde },
+        },
+        trail: [
+          ...state.trail,
+          trailEntry("Follow-up", "followup", tekst, action.waarde === "afwijkend_beloop" ? ["RF-013"] : [action.factorId], null),
+        ],
+      };
+    }
+
+    case "AFRONDEN_FACTOREN_FOLLOWUP":
+      return { ...state, stap: "followup-uitkomst" };
 
     case "KIES_INTERVENTIE":
       return { ...state, gekozenInterventieId: action.interventieId, contraIndicatieAntwoorden: {} };

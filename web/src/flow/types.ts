@@ -77,6 +77,36 @@ export interface FlowInterventie {
   contraIndicaties: FlowContraIndicatie[];
 }
 
+/**
+ * Requirements §10.1 (referentiedocument §16) — alleen gevuld bij
+ * uitkomsttype=samengesteld. Elke factor draagt met een eigen
+ * bijdrageGewicht bij aan het profiel, geen hoofdhypothese.
+ */
+export interface FlowFactorInterventie {
+  id: string;
+  naam: string;
+  kernbeschrijving: string;
+  evidenceNiveau: string;
+}
+
+export interface FlowFactorSignalering {
+  interpretatie: string | null;
+}
+
+export interface FlowFactor {
+  id: string;
+  naam: string;
+  kernbeschrijving: string;
+  bijdrageGewicht: string;
+  bevinding: string | null;
+  /// true voor een hergebruikt red-flag-object (bijv. RF-004) — al
+  /// uitgevraagd via de bestaande anamneseChecks-stap, geen eigen toggle
+  /// in de factor-screening-stap (zie ReasoningFlow.tsx).
+  viaAnamnese: boolean;
+  interventie: FlowFactorInterventie | null;
+  signalering: FlowFactorSignalering | null;
+}
+
 export interface FlowEducatie {
   id: string;
   naam: string;
@@ -110,6 +140,8 @@ export interface FlowData {
   anamneseChecks: FlowAnamneseCheck[];
   testen: FlowTest[];
   interventies: FlowInterventie[];
+  /// Requirements §10.1 — leeg bij uitkomsttype=enkelvoudig.
+  factoren: FlowFactor[];
   educatie: FlowEducatie | null;
 }
 
@@ -135,6 +167,12 @@ export type FlowStap =
   | "test-select"
   | "test-interpretatie"
   | "behandelstrategie"
+  // Requirements §10.1: aparte flow-tak voor uitkomsttype=samengesteld,
+  // vervangt test-select/test-interpretatie/behandelstrategie voor die
+  // items — screent ALLE factoren door (stopt niet bij de eerste
+  // bevestigde), dan één overzichtstabel i.p.v. een lineair vervolgpad.
+  | "factor-screening"
+  | "factor-overzicht"
   | "educatie"
   | "afgerond"
   | "followup-entry"
@@ -180,6 +218,18 @@ export interface FollowupState {
   npqScore: number | null;
   patroonType: "verwachte_fluctuatie" | "afwijkend_beloop" | null;
   notitie: string | null;
+  /// Requirements §10.2: per-factor extern-opvolgingsstatus (alleen bij
+  /// uitkomsttype=samengesteld, alleen factoren met een signalering-
+  /// koppeling) — "ja/nee/nog niet", handmatig nagevraagd bij elk
+  /// vervolgconsult, geen geautomatiseerde koppeling met externe systemen
+  /// en geen state die wordt overgenomen uit een eerdere sessie (zelfde
+  /// "lichte instap"-principe als de rest van het follow-up-consult).
+  signaleringAntwoorden: Record<string, "ja" | "nee" | "nog_niet">;
+  /// Requirements §10.3: per-factor voortgang voor de fysio-behandelde
+  /// factoren (interventie-gekoppeld) — patroon_type (uit PPPD, §18
+  /// generiek) hier op per-factor-niveau i.p.v. per-episode-niveau zoals
+  /// bij PPPD. Zelfde "geen carry-over"-principe als signaleringAntwoorden.
+  factorVoortgang: Record<string, "verwachte_fluctuatie" | "afwijkend_beloop">;
 }
 
 export interface FlowState {
@@ -234,6 +284,12 @@ export interface FlowState {
   /// flow (nooit automatisch overgenomen uit een eerdere sessie).
   gekozenFase: string | null;
 
+  /// Requirements §10.1: per-factor aanwezig/afwezig-antwoorden voor de
+  /// samengesteld-tak — los van anamneseAntwoorden (dat blijft alleen voor
+  /// de rode-vlag-checks, ongewijzigd). Een viaAnamnese-factor (RF-004)
+  /// staat hier NIET in — die waarde wordt afgeleid uit anamneseAntwoorden.
+  factorAntwoorden: Record<string, boolean>;
+
   gekozenInterventieId: string | null;
   contraIndicatieAntwoorden: Record<string, boolean>;
 
@@ -282,6 +338,17 @@ export type FlowAction =
   | { type: "NA_INTERRUPT_DOORGAAN" }
   | { type: "ANAMNESE_ANTWOORD"; redFlagId: string; aanwezig: boolean }
   | { type: "GA_NAAR_TESTSELECTIE" }
+  // Requirements §10.1: per-factor antwoord in de samengesteld-tak — komt
+  // NOOIT met een stap-overgang (in tegenstelling tot KIES_BEVINDING bij
+  // enkelvoudige items): screent door tot alle factoren beantwoord zijn.
+  | { type: "FACTOR_ANTWOORD"; factorId: string; aanwezig: boolean }
+  | { type: "GA_NAAR_FACTOR_OVERZICHT" }
+  | { type: "GA_NAAR_EDUCATIE" }
+  // Requirements §10.2: extern-opvolgingsstatus per factor, bij follow-up.
+  | { type: "SIGNALERING_ANTWOORD"; factorId: string; waarde: "ja" | "nee" | "nog_niet" }
+  // Requirements §10.3: per-factor voortgang voor fysio-behandelde factoren.
+  | { type: "FACTOR_VOORTGANG"; factorId: string; waarde: "verwachte_fluctuatie" | "afwijkend_beloop" }
+  | { type: "AFRONDEN_FACTOREN_FOLLOWUP" }
   | { type: "KIES_TEST"; testId: string }
   | { type: "KIES_BEVINDING"; relatieId: string }
   | { type: "TERUG_NAAR_TESTSELECTIE" }

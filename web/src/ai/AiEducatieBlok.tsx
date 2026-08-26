@@ -11,15 +11,18 @@ import type { AIEducatieAntwoord } from "./types";
  * therapeut-controle-principe (§22 stap 6): vrijgave blijft een aparte,
  * expliciete handeling.
  */
-export function AiEducatieBlok({ eduId }: { eduId: string }) {
+export function AiEducatieBlok({ eduId, bevestigdeFactorIds }: { eduId: string; bevestigdeFactorIds?: string[] }) {
   const [antwoord, setAntwoord] = useState<AIEducatieAntwoord | null>(null);
   const [fout, setFout] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchPatientEducatie(eduId, "patient")
+    fetchPatientEducatie(eduId, "patient", bevestigdeFactorIds)
       .then(setAntwoord)
       .catch((e) => setFout(String(e)));
-  }, [eduId]);
+    // bevestigdeFactorIds via join: een nieuwe array-referentie met dezelfde
+    // inhoud mag geen onnodige herfetch triggeren.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eduId, (bevestigdeFactorIds ?? []).join(",")]);
 
   if (fout) return <p className="error">{fout}</p>;
   if (!antwoord) return <p className="hint">Patiëntuitleg samenstellen…</p>;
