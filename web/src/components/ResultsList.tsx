@@ -1,5 +1,6 @@
 import type { ObjectSummary } from "../types";
 import { TYPE_LABELS } from "../types";
+import { naarBPPD } from "./weergave";
 
 interface Props {
   resultaten: ObjectSummary[];
@@ -31,10 +32,8 @@ export function ResultsList({ resultaten, selectedId, onSelect, loading }: Props
               {obj.tier !== null && <span className="badge tier-badge">Tier {obj.tier}</span>}
               <span className="badge evidence-badge">{obj.evidenceNiveau.replace(/_/g, " ")}</span>
             </div>
-            <div className="result-card-title">
-              {obj.naam} <span className="result-id">({obj.id})</span>
-            </div>
-            <p className="result-snippet">{obj.kernbeschrijving}</p>
+            <div className="result-card-title">{naarBPPD(obj.naam)}</div>
+            <p className="result-snippet">{naarBPPD(obj.kernbeschrijving)}</p>
           </button>
         </li>
       ))}

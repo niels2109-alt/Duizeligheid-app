@@ -14,8 +14,19 @@ async function json<T>(res: Response, fallbackError: string): Promise<T> {
   return res.json();
 }
 
-export async function startSessie(): Promise<{ id: string; gestartOp: string; vervaltOp: string }> {
-  const res = await fetch("/api/sessies", { method: "POST", credentials: "include" });
+// reasoningEngineVersie: optioneel (requirements §11.1/§11.2, keuzescherm)
+// — ongebruikt laten (V1's bestaande aanroep) geeft server-side het
+// schema-default v1, exact het bestaande gedrag.
+export async function startSessie(
+  reasoningEngineVersie?: "v1" | "v2"
+): Promise<{ id: string; gestartOp: string; vervaltOp: string; reasoningEngineVersie: string }> {
+  const res = await fetch("/api/sessies", {
+    method: "POST",
+    credentials: "include",
+    ...(reasoningEngineVersie
+      ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reasoningEngineVersie }) }
+      : {}),
+  });
   return json(res, "Kon sessie niet starten.");
 }
 
@@ -40,6 +51,18 @@ export async function zetAandoening(sessieId: string, aandoeningId: string): Pro
     body: JSON.stringify({ aandoeningId }),
   });
   await json(res, "Kon aandoening niet koppelen aan sessie.");
+}
+
+// Requirements §8.4: koppelt een sessie aan een Behandelepisode (trend-
+// weergave, PPPD) — hergebruikt dezelfde PATCH-route als zetAandoening.
+export async function koppelEpisode(sessieId: string, episodeId: string): Promise<void> {
+  const res = await fetch(`/api/sessies/${sessieId}`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ episodeId }),
+  });
+  await json(res, "Kon behandeltraject niet koppelen aan sessie.");
 }
 
 export async function fetchSessie(sessieId: string): Promise<SessieDetail> {

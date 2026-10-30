@@ -1,5 +1,6 @@
 import type {
   FlowData,
+  FlowTestBevinding,
   HypotheseState,
   ReasoningTrailEntry,
 } from "./types";
@@ -48,4 +49,22 @@ export function trailEntry(
 export function fmtLabel(v: string | null | undefined): string {
   if (!v) return "—";
   return v.replace(/_/g, " ");
+}
+
+/**
+ * Requirements §8.1: sommige bevindingen hebben geen vaste diagnostische
+ * waarde, maar een verwijzing naar een voorwaarde-relatie (bijv. TEST-005's
+ * Bárány-criteria — pas "hoog" zodra de PPPD-voorwaarde is vervuld). Nooit
+ * als vaste waarde geïmplementeerd: dit leest de daadwerkelijke, in déze
+ * flow-sessie bevestigde staat.
+ */
+export function effectieveDiagnostischeWaarde(
+  bevinding: FlowTestBevinding,
+  voorwaardenBevestigd: Record<string, boolean>
+): string | null {
+  if (bevinding.diagnostischeWaarde) return bevinding.diagnostischeWaarde;
+  if (bevinding.diagnostischeWaardeVoorwaardeRelatieId) {
+    return voorwaardenBevestigd[bevinding.diagnostischeWaardeVoorwaardeRelatieId] ? "hoog" : null;
+  }
+  return null;
 }

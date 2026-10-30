@@ -83,3 +83,20 @@ export interface ObjectDetail {
   relatiesVanuit: RelatieView[];
   relatiesNaartoe: RelatieView[];
 }
+
+// Requirements §11.1/§11.4 stap 2 — GET /api/rode-vlaggen (server/src/redFlags.ts):
+// de losstaande, herbruikbare rode-vlaggenmodule, aandoening-onafhankelijk
+// en gegroepeerd in klinische categorieën. Los van de FlowAnamneseCheck/
+// FlowTestBevinding-vormen in flow/types.ts, die V1's bestaande, per-
+// aandoening rode-vlag-weergave blijven aansturen (ongewijzigd).
+export interface RodeVlagInfo {
+  id: string;
+  naam: string;
+  kernbeschrijving: string;
+  actietype: string | null;
+}
+
+export interface RodeVlagCategorie {
+  categorie: string;
+  redFlaggen: RodeVlagInfo[];
+}

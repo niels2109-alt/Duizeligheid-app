@@ -6,7 +6,19 @@ import { ObjectDetailPanel } from "./ObjectDetailPanel";
 import { VraagPaneel } from "../ai/VraagPaneel";
 import type { ObjectDetail, ObjectSummary, Rol, TypeObject } from "../types";
 
-export function KennisbankModus() {
+interface Props {
+  /**
+   * Bidirectionele kennisbank-koppeling (§11.3 punt 5/V2-ontwerp §17):
+   * gezet vanuit Modus A (V2Flow) na een "→ kennisbank"-klik. Eenmalig
+   * geconsumeerd (zie onConsumedFocusId) zodat een latere, handmatige
+   * navigatie binnen Modus B niet steeds terugspringt naar dit object.
+   */
+  focusId?: string | null;
+  onConsumedFocusId?: () => void;
+  onStartFlow?: (object: ObjectDetail) => void;
+}
+
+export function KennisbankModus({ focusId, onConsumedFocusId, onStartFlow }: Props) {
   const [rol, setRol] = useState<Rol>("therapeut");
   const [q, setQ] = useState("");
   const [types, setTypes] = useState<TypeObject[]>([]);
@@ -16,10 +28,16 @@ export function KennisbankModus() {
 
   const [resultaten, setResultaten] = useState<ObjectSummary[]>([]);
   const [loadingResultaten, setLoadingResultaten] = useState(true);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(focusId ?? null);
   const [detail, setDetail] = useState<ObjectDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Eenmalige "focus"-navigatie vanuit V2Flow consumeren (zie Props hierboven).
+  useEffect(() => {
+    if (focusId) onConsumedFocusId?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Filterwaarden eenmalig ophalen.
   useEffect(() => {
@@ -77,7 +95,7 @@ export function KennisbankModus() {
       <header className="app-header">
         <h1>Duizeligheid — Kennisbank (Modus B)</h1>
         <p className="hint">
-          Zoek-/filterinterface over de gevulde BPPV-content — los van elke reasoning-flow, puur
+          Zoek-/filterinterface over de gevulde BPPD-content — los van elke reasoning-flow, puur
           raadplegen. {rolUitleg}
         </p>
       </header>
@@ -112,7 +130,12 @@ export function KennisbankModus() {
           />
         </section>
         <section className="detail-section">
-          <ObjectDetailPanel object={detail} loading={loadingDetail} onNavigate={setSelectedId} />
+          <ObjectDetailPanel
+            object={detail}
+            loading={loadingDetail}
+            onNavigate={setSelectedId}
+            onStartFlow={onStartFlow}
+          />
         </section>
       </main>
     </div>

@@ -25,8 +25,17 @@ export async function stelVraag(vraag: string, rol: Rol): Promise<AIAntwoord> {
   return json(res, "Vraag kon niet worden beantwoord.");
 }
 
-export async function fetchPatientEducatie(eduId: string, rol: Rol): Promise<AIEducatieAntwoord> {
-  const res = await fetch(`/api/ai/educatie/${encodeURIComponent(eduId)}?rol=${rol}`, {
+// bevestigdeFactorIds: requirements §10.4/§20 — bij samengesteld-type
+// educatie alleen de daadwerkelijk bevestigde factoren meesturen, zodat de
+// server nooit ongebruikte factoren "voor de zekerheid" opneemt.
+export async function fetchPatientEducatie(
+  eduId: string,
+  rol: Rol,
+  bevestigdeFactorIds?: string[]
+): Promise<AIEducatieAntwoord> {
+  const params = new URLSearchParams({ rol });
+  (bevestigdeFactorIds ?? []).forEach((id) => params.append("bevestigd", id));
+  const res = await fetch(`/api/ai/educatie/${encodeURIComponent(eduId)}?${params.toString()}`, {
     credentials: "include",
   });
   return json(res, "Kon patiëntuitleg niet ophalen.");

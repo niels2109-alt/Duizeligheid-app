@@ -93,6 +93,19 @@ enum RelatieType {
   differentiaal
 }
 
+/// Requirements §11.1 (Clinical Reasoning Engine V2) — vult aan op het
+/// al bestaande diagnostischeWaarde-veld: polariteit stuurt de RICHTING
+/// (ondersteunt/spreekt-tegen/neutraal), diagnostischeWaarde blijft het
+/// GEWICHT (hoog/matig/laag) — samen sturen ze de V2-rangschikking.
+/// Alleen relevant op relatieType=bevinding_interpretatie-relaties; voor
+/// V1 ongebruikt (blijft null), dus geen enkele bestaande relatie hoeft
+/// aangepast te worden.
+enum Polariteit {
+  ondersteunt
+  spreekt_tegen
+  neutraal
+}
+
 enum DiagnostischeWaarde {
   hoog
   matig
@@ -177,7 +190,8 @@ model KnowledgeObject {
 
   patientEducatieObject PatientEducatieObject?
 
-  sessies Sessie[]
+  sessies          Sessie[]
+  behandelepisodes Behandelepisode[]
 
   @@map("knowledge_objects")
 }
@@ -213,6 +227,9 @@ model Relatie {
   bijdrageGewicht          BijdrageGewicht?           @map("bijdrage_gewicht")
   patroonType              PatroonType?               @map("patroon_type")
   actietype                ActieType?
+
+  /// Requirements §11.1 (V2) — zie Polariteit-toelichting.
+  polariteit Polariteit?
 
   evidenceNiveau EvidenceNiveau? @map("evidence_niveau")
 
@@ -265,7 +282,8 @@ model Therapeut {
 
   aangemaaktOp DateTime @default(now()) @map("aangemaakt_op")
 
-  sessies Sessie[]
+  sessies          Sessie[]
+  behandelepisodes Behandelepisode[]
 
   @@map("therapeuten")
 }
@@ -286,6 +304,17 @@ model Sessie {
   aandoeningId String?          @map("aandoening_id")
   aandoening   KnowledgeObject? @relation(fields: [aandoeningId], references: [id])
 
+  /// Requirements §8.4: koppelt opeenvolgende sessies van hetzelfde
+  /// behandeltraject aan elkaar voor trendweergave (PPPD). Nullable — bij
+  /// BPPV/vestibulaire hypofunctie niet verplicht/functioneel niet nodig.
+  episodeId String?          @map("episode_id")
+  episode   Behandelepisode? @relation(fields: [episodeId], references: [id])
+
+  /// Requirements §11.1/§11.2 (V2): welke flow-logica deze sessie gebruikt.
+  /// Default v1 — bestaande en toekomstige V1-sessies blijven ongewijzigd
+  /// functioneren zonder dat er iets expliciet gezet hoeft te worden.
+  reasoningEngineVersie ReasoningEngineVersie @default(v1) @map("reasoning_engine_versie")
+
   stappen StapLog[]
 
   /// Versleutelde samenvattingstekst — pas gevuld bij export (§2.3), zodat
@@ -304,6 +333,58 @@ model Sessie {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("sessies")
+}
+
+enum EpisodeStatus {
+  actief
+  afgesloten
+}
+
+/// Requirements §11.1/§11.2 — welke reasoning-flow-logica een Sessie
+/// gebruikt. V2 is een parallelle, schakelbare modus naast V1, geen
+/// vervanging (§11 toelichting).
+enum ReasoningEngineVersie {
+  v1
+  v2
+}
+
+/// Behandelepisode — requirements §8.4 (PPPD-aanvulling). Groepeert
+/// opeenvolgende Sessies van hetzelfde behandeltraject, chronologisch via
+/// Sessie.gestartOp — nodig voor trendweergave (bijv. NPQ-score over
+/// meerdere sessies, mogelijk maanden). Niet eerder nodig: bij BPPV en
+/// vestibulaire hypofunctie was follow-up steeds een vergelijking met de
+/// vorige sessie, geen sessie-overstijgende trend.
+///
+/// `sessie_ids` uit de requirements-tabel is hier de reverse relation
+/// (Sessie.episodeId) i.p.v. een los opgeslagen array — normaliseert de
+/// koppeling (één bron van waarheid) en levert de chronologische volgorde
+/// al via Sessie.gestartOp, zonder een JSON-array te hoeven synchroniseren.
+///
+/// Blijft, net als Sessie zelf, een tijdelijke groepering van vervallende
+/// sessies (§13: geen volledige dossiervoering) — geen permanent
+/// patiëntdossier. `vervaltOp` verlengt mee met elke nieuw gekoppelde
+/// Sessie (nooit verkort door een individuele export), zodat de episode
+/// nooit langer bestaat dan haar laatst vervallende sessie.
+model Behandelepisode {
+  id String @id @default(cuid())
+
+  aandoeningId String          @map("aandoening_id")
+  aandoening   KnowledgeObject @relation(fields: [aandoeningId], references: [id])
+
+  therapeutId String    @map("therapeut_id")
+  therapeut   Therapeut @relation(fields: [therapeutId], references: [id])
+
+  gestartOp DateTime      @default(now()) @map("gestart_op")
+  status    EpisodeStatus @default(actief)
+
+  vervaltOp DateTime @map("vervalt_op")
+
+  sessies Sessie[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("behandelepisodes")
 }
 
 /// StapLog — sub-object van Sessie, requirements §1.5.

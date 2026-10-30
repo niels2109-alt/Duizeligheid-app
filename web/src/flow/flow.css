@@ -136,6 +136,31 @@
   margin-top: 8px;
 }
 
+/* --- V2: "geen dominante hypothese" (V2-ontwerp §14) — bewust NEUTRAAL
+   getint, geen danger-kleur: dit is een volwaardige uitkomst, geen
+   foutstatus. --- */
+.geen-dominante-hint {
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  margin-bottom: 12px;
+}
+
+/* --- V2: herweging-log (V2-ontwerp §13) — bewust platte tekstlijst, geen
+   balk/score-achtige weergave. --- */
+.herweging-log {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
 /* --- Anamnese / contra-indicatie-checklist --- */
 .anamnese-list {
   list-style: none;
@@ -177,6 +202,25 @@
   border-color: var(--accent);
   color: var(--accent-contrast);
   font-weight: 600;
+}
+
+/* --- Fase-selector (requirements §7.1) --- */
+.fase-selector {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.fase-selector h3 {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+}
+
+.fase-opties {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 /* --- Testselectie --- */
@@ -254,6 +298,42 @@
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid var(--border);
+}
+
+/* --- Follow-up: twee onafhankelijke evaluatielussen (requirements §7.3) --- */
+.followup-lus {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.followup-lus h3 {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+}
+
+.followup-resultaat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 12px 0;
+}
+
+.followup-resultaat-grid h3 {
+  margin: 0 0 4px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.followup-resultaat-grid p {
+  margin: 0;
+  font-weight: 600;
+}
+
+@media (max-width: 600px) {
+  .followup-resultaat-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .ci-check h3 {
@@ -498,6 +578,112 @@
   resize: vertical;
 }
 
+/* --- Behandelepisode: trendmatige follow-up (requirements §8.4/§8.5 stap 4) --- */
+.episode-kiezer {
+  margin-bottom: 4px;
+}
+
+.episode-kiezer h3 {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+}
+
+.episode-list {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.veld {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 12px 0;
+}
+
+.veld input,
+.veld textarea {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+}
+
+.episode-trend-paneel {
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.episode-trend-paneel h3 {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+}
+
+.trend-tabel-wrap {
+  overflow-x: auto;
+}
+
+.trend-tabel {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin-top: 10px;
+}
+
+.trend-tabel th,
+.trend-tabel td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.trend-tabel th {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* --- Factorenoverzicht: samengesteld-type (requirements §10.1) --- */
+.factoren-tabel-wrap {
+  overflow-x: auto;
+}
+
+.factoren-tabel {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin-top: 10px;
+}
+
+.factoren-tabel th,
+.factoren-tabel td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.factoren-tabel th {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
 /* --- Sessies-overzicht --- */
 .sessies-list {
   list-style: none;
@@ -526,10 +712,72 @@
   font-size: 0.95rem;
 }
 
+/* --- Rode-vlaggenmodule (requirements §11.1/§11.4 stap 2) — losstaand,
+   herbruikbaar component, nog niet gemonteerd in een bestaand scherm. --- */
+.rode-vlaggen-paneel {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+}
+
+.rode-vlaggen-paneel h3 {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+}
+
+.rode-vlag-categorie {
+  margin-bottom: 14px;
+}
+
+.rode-vlag-categorie h4 {
+  margin: 0 0 6px;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
+
+.rode-vlag-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rode-vlag-item {
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-left-color: var(--danger);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+}
+
+.rode-vlag-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.rode-vlag-naam {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.rode-vlag-kernbeschrijving {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
 @media print {
   .modus-tabs,
   .app-topbar,
   .hypothese-panel,
+  .rode-vlaggen-paneel,
   .flow-actions,
   .triage-opties,
   .anamnese-list,

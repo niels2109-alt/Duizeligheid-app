@@ -277,12 +277,22 @@ aiRouter.get("/educatie/:id", async (req: Request<{ id: string }>, res: Response
   });
   const alarmsignalen = signaleringObjecten.map((rf) => ({ objectId: rf.id, tekst: rf.kernbeschrijving }));
 
+  // Requirements §10.4: bij samengesteld-type educatie kan signaleringObjectIds
+  // twee soorten content-blokken bevatten — echte alarmsignalen (typeObject=
+  // red_flag, "neem contact op bij...") en algemene per-factor-uitleg
+  // (typeObject=prognostische_factor, "voor jou relevant..."). Type-gedreven
+  // onderscheid, niet op specifieke object-id's — werkt zo automatisch mee
+  // voor elk toekomstig samengesteld item met dezelfde datavorm.
+  const echteAlarmsignalen = alarmsignalen.filter((a) => signaleringObjecten.find((o) => o.id === a.objectId)?.typeObject === "red_flag");
+  const factorUitleg = alarmsignalen.filter((a) => signaleringObjecten.find((o) => o.id === a.objectId)?.typeObject !== "red_flag");
+
   const deterministischeTekst = [
     eduObject.kernbeschrijving,
     `Verwachtingsmanagement: ${peo.verwachtingsmanagement}`,
     peo.rationaleUitlegCounterintuitief ? `Waarom dit advies: ${peo.rationaleUitlegCounterintuitief}` : null,
-    alarmsignalen.length > 0
-      ? "Neem contact op met je fysiotherapeut of huisarts bij: " + alarmsignalen.map((a) => a.tekst).join(" — ")
+    factorUitleg.length > 0 ? "Voor jou relevant: " + factorUitleg.map((a) => a.tekst).join(" — ") : null,
+    echteAlarmsignalen.length > 0
+      ? "Neem contact op met je fysiotherapeut of huisarts bij: " + echteAlarmsignalen.map((a) => a.tekst).join(" — ")
       : null,
   ]
     .filter((x): x is string => x != null)

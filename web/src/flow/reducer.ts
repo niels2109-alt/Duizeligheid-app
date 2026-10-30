@@ -1,5 +1,5 @@
 import type { FlowAction, FlowState } from "./types";
-import { bouwHypothesen, trailEntry, zetWeging } from "./logic";
+import { bouwHypothesen, effectieveDiagnostischeWaarde, trailEntry, zetWeging } from "./logic";
 
 export const initialFlowState: FlowState = {
   flow: null,
@@ -10,15 +10,31 @@ export const initialFlowState: FlowState = {
   hypotheses: [],
   gekozenTriageId: null,
   interrupt: null,
+  voorwaardeCheckPending: null,
+  voorwaardenBevestigd: {},
+  episodeId: null,
   anamneseAntwoorden: {},
   gekozenTestId: null,
   gekozenBevindingRelatieId: null,
   bevestigdeKwalificatie: null,
+  hypotheseBevestigd: false,
+  gekozenFase: null,
+  factorAntwoorden: {},
   gekozenInterventieId: null,
   contraIndicatieAntwoorden: {},
   eduVrijgegeven: false,
   trail: [],
-  followup: { vorigeInterventieId: null, uitkomst: null },
+  followup: {
+    vorigeInterventieId: null,
+    uitkomst: null,
+    faseVoortgang: null,
+    interventieEffect: null,
+    npqScore: null,
+    patroonType: null,
+    notitie: null,
+    signaleringAntwoorden: {},
+    factorVoortgang: {},
+  },
 };
 
 export function flowReducer(state: FlowState, action: FlowAction): FlowState {
@@ -42,14 +58,19 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
 
     case "KIES_TRIAGE": {
       if (!state.flow) return state;
-      const isBppv = action.id === state.flow.aandoening.id;
+      // Alleen de HUIDIGE bundel bevestigen, of een niet-volledig-uitgewerkte
+      // (dead-end) differentiaal kiezen. Wisselen naar een ANDER, zelf ook
+      // volledig item loopt via TRIAGE_WISSEL_* (zie ReasoningFlow.tsx) —
+      // die roept deze case dus nooit aan met een volledig-uitgewerkt
+      // ander-item-id.
+      const isHuidigeAandoening = action.id === state.flow.aandoening.id;
       let hypotheses = state.hypotheses;
-      if (isBppv) {
+      if (isHuidigeAandoening) {
         hypotheses = zetWeging(
           hypotheses,
           state.flow.aandoening.id,
           "hoog",
-          "Aanvalsgewijs, houdingsafhankelijk patroon past bij BPPV."
+          `Patroon komt overeen met het gerapporteerde triagekenmerk (${state.flow.aandoening.naam}).`
         );
         state.flow.differentialen.forEach((d) => {
           hypotheses = zetWeging(
@@ -63,14 +84,14 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
         hypotheses = zetWeging(
           hypotheses,
           action.id,
-          "hoog",
-          "Patroon komt overeen met het gerapporteerde triagekenmerk."
+          "laag",
+          `Nog niet volledig uitgewerkt in dit systeem — kan niet gewogen worden op basis van het triagekenmerk.`
         );
         hypotheses = zetWeging(
           hypotheses,
           state.flow.aandoening.id,
           "laag",
-          "Patroon past niet bij BPPV's kenmerkende korte, houdingsgebonden aanvallen."
+          `Patroon past niet bij het kenmerkende patroon van ${state.flow.aandoening.naam}.`
         );
       }
       const gekozen =
@@ -81,7 +102,7 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
         ...state,
         gekozenTriageId: action.id,
         hypotheses,
-        stap: isBppv ? "anamnese" : "dead-end",
+        stap: isHuidigeAandoening ? "anamnese" : "dead-end",
         trail: [
           ...state.trail,
           trailEntry(
@@ -89,7 +110,106 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
             "triage",
             `Triagekenmerk gekozen: ${gekozen}.`,
             [action.id],
-            isBppv ? state.flow.aandoening.evidenceNiveau : null
+            isHuidigeAandoening ? state.flow.aandoening.evidenceNiveau : null
+          ),
+        ],
+      };
+    }
+
+    // Wisselen naar een ander, zelf ook volledig uitgewerkt item (bijv. van
+    // BPPV naar vestibulaire hypofunctie) — requirements §7.4 stap 3.
+    case "TRIAGE_WISSEL_START":
+      return { ...state, laden: true, fout: null };
+
+    case "TRIAGE_WISSEL_FOUT":
+      return { ...state, laden: false, fout: action.fout };
+
+    case "TRIAGE_WISSEL_OK": {
+      const nieuweFlow = action.flow;
+      let hypotheses = bouwHypothesen(nieuweFlow);
+      hypotheses = zetWeging(
+        hypotheses,
+        nieuweFlow.aandoening.id,
+        "hoog",
+        `Patroon komt overeen met het gerapporteerde triagekenmerk (${nieuweFlow.aandoening.naam}).`
+      );
+      nieuweFlow.differentialen.forEach((d) => {
+        hypotheses = zetWeging(
+          hypotheses,
+          d.id,
+          "laag",
+          "Patroon paste niet bij het gerapporteerde triagekenmerk."
+        );
+      });
+      return {
+        ...state,
+        laden: false,
+        flow: nieuweFlow,
+        hypotheses,
+        gekozenTriageId: nieuweFlow.aandoening.id,
+        stap: "anamnese",
+        trail: [
+          ...state.trail,
+          trailEntry(
+            "Triage",
+            "triage",
+            `Triagekenmerk gekozen: ${nieuweFlow.aandoening.naam}.`,
+            [nieuweFlow.aandoening.id],
+            nieuweFlow.aandoening.evidenceNiveau
+          ),
+        ],
+      };
+    }
+
+    // Requirements §8.1: harde gate vóór het wisselen naar een voorwaarde-
+    // gated aandoening (bijv. PPPD) — de daadwerkelijke bundel-wissel loopt
+    // pas ná bevestiging via TRIAGE_WISSEL_*, net als bij een ongated item.
+    case "START_VOORWAARDE_CHECK":
+      return {
+        ...state,
+        stap: "voorwaarde-check",
+        voorwaardeCheckPending: { id: action.id, naam: action.naam, voorwaarde: action.voorwaarde },
+      };
+
+    case "BEVESTIG_VOORWAARDE":
+      return {
+        ...state,
+        voorwaardenBevestigd: { ...state.voorwaardenBevestigd, [action.relatieId]: true },
+        trail: [
+          ...state.trail,
+          trailEntry(
+            "Voorwaarde",
+            "anamnese",
+            `Voorwaarde bevestigd: ${state.voorwaardeCheckPending?.voorwaarde.bevinding ?? ""}.`,
+            [state.voorwaardeCheckPending?.voorwaarde.anamneseItemId ?? ""].filter(Boolean),
+            null
+          ),
+        ],
+      };
+
+    case "ANNULEER_VOORWAARDE_CHECK":
+      return { ...state, stap: "triage", voorwaardeCheckPending: null };
+
+    // Requirements §8.4: structurele koppeling, geen trail-entry (vgl.
+    // SESSIE_GESTART).
+    case "EPISODE_GEKOZEN":
+      return { ...state, episodeId: action.episodeId };
+
+    case "KIES_FASE": {
+      if (!state.flow) return state;
+      return {
+        ...state,
+        gekozenFase: action.fase,
+        trail: [
+          ...state.trail,
+          trailEntry(
+            "Anamnese",
+            "anamnese",
+            // Requirements §7.1: fase wordt via samengestelde anamnese/
+            // observatie bepaald, geen aparte test.
+            `Fase vastgesteld (anamnese/observatie): ${action.fase}.`,
+            [state.flow.aandoening.id],
+            null
           ),
         ],
       };
@@ -166,8 +286,62 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
       };
     }
 
+    // Requirements §10.1: bij uitkomsttype=samengesteld vervangt de factor-
+    // screening-stap de test-select-stap — fase 1/2 (triage/anamnese)
+    // blijven ongewijzigd (§19: "flow-fasen zelf ongewijzigd"), alleen fase
+    // 3 vertakt hier voor het eerst op uitkomsttype.
     case "GA_NAAR_TESTSELECTIE":
-      return { ...state, stap: "test-select" };
+      return { ...state, stap: state.flow?.aandoening.uitkomsttype === "samengesteld" ? "factor-screening" : "test-select" };
+
+    // Requirements §10.1: NOOIT een stap-overgang hier — dit is precies het
+    // verschil met KIES_BEVINDING (dat wél naar test-interpretatie
+    // springt): de flow moet doorscreenen tot alle factoren beantwoord
+    // zijn, niet stoppen bij de eerste bevestigde.
+    case "FACTOR_ANTWOORD": {
+      if (!state.flow) return state;
+      const factor = state.flow.factoren.find((f) => f.id === action.factorId);
+      let trail = state.trail;
+      if (factor && action.aanwezig) {
+        trail = [
+          ...trail,
+          trailEntry(
+            "Factorenscreening",
+            "test",
+            `${factor.bevinding ?? factor.naam} (bijdrage: ${factor.bijdrageGewicht}).`,
+            [factor.id],
+            null
+          ),
+        ];
+      }
+      return {
+        ...state,
+        factorAntwoorden: { ...state.factorAntwoorden, [action.factorId]: action.aanwezig },
+        trail,
+      };
+    }
+
+    case "GA_NAAR_FACTOR_OVERZICHT": {
+      if (!state.flow) return state;
+      const bevestigd = state.flow.factoren.filter((f) =>
+        f.viaAnamnese ? state.anamneseAntwoorden[f.id] === true : state.factorAntwoorden[f.id] === true
+      );
+      return {
+        ...state,
+        stap: "factor-overzicht",
+        trail: [
+          ...state.trail,
+          trailEntry(
+            "Factorenoverzicht",
+            "interpretatie",
+            bevestigd.length > 0
+              ? `Bevestigd factorenprofiel (${bevestigd.length}): ${bevestigd.map((f) => f.naam).join(", ")}.`
+              : "Geen van de gescreende factoren bevestigd.",
+            bevestigd.map((f) => f.id),
+            null
+          ),
+        ],
+      };
+    }
 
     case "KIES_TEST": {
       const test = state.flow?.testen.find((t) => t.id === action.testId);
@@ -189,6 +363,7 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
       let hypotheses = state.hypotheses;
       let interrupt = state.interrupt;
       let bevestigdeKwalificatie = state.bevestigdeKwalificatie;
+      let hypotheseBevestigd = state.hypotheseBevestigd;
       const isNegatief = bevinding.kwalificatie?.resultaat === "negatief";
 
       if (bevinding.actietype === "acuut_verwijzen") {
@@ -212,9 +387,17 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
           `${test.naam}: ${bevinding.interpretatie}`
         );
       } else if (bevinding.naarObjectId === state.flow.aandoening.id) {
-        const weging = (bevinding.diagnostischeWaarde as "hoog" | "matig" | "laag" | null) ?? "matig";
+        // Requirements §8.1: TEST-005's diagnostische waarde is conditioneel
+        // (null + een verwijzing naar de voorwaarde-relatie) — nooit een
+        // vaste waarde. effectieveDiagnostischeWaarde lost dit op aan de
+        // hand van state.voorwaardenBevestigd; voor alle andere tests
+        // (waar diagnostischeWaarde al vast staat) verandert dit niets.
+        const weging =
+          (effectieveDiagnostischeWaarde(bevinding, state.voorwaardenBevestigd) as "hoog" | "matig" | "laag" | null) ??
+          "matig";
         hypotheses = zetWeging(hypotheses, state.flow.aandoening.id, weging, `${test.naam}: ${bevinding.interpretatie}`);
         bevestigdeKwalificatie = bevinding.kwalificatie;
+        hypotheseBevestigd = true;
       }
 
       return {
@@ -223,6 +406,7 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
         hypotheses,
         interrupt,
         bevestigdeKwalificatie,
+        hypotheseBevestigd,
         stap: "test-interpretatie",
         trail: [
           ...state.trail,
@@ -242,6 +426,55 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
 
     case "GA_NAAR_BEHANDELSTRATEGIE":
       return { ...state, stap: "behandelstrategie" };
+
+    // Requirements §10.1: alleen gebruikt door de samengesteld-tak —
+    // factor-overzicht IS al de fase-4/5-output, geen aparte
+    // contra-indicatie-/interventiekeuze-stap zoals bij enkelvoudige items.
+    case "GA_NAAR_EDUCATIE":
+      return { ...state, stap: "educatie" };
+
+    // Requirements §10.2: "ja/nee/nog niet" per extern-behandelde factor —
+    // geen automatische test/hertest. Elke keuze is zijn eigen trail-entry
+    // (zelfde patroon als de andere follow-up-lussen: nooit samengevoegd
+    // tot één oordeel).
+    case "SIGNALERING_ANTWOORD": {
+      const factor = state.flow?.factoren.find((f) => f.id === action.factorId);
+      const label = action.waarde === "ja" ? "gebeurd" : action.waarde === "nee" ? "niet gebeurd" : "nog niet gebeurd";
+      const tekst = `${factor?.signalering?.interpretatie ?? factor?.naam ?? action.factorId} — ${label}.`;
+      return {
+        ...state,
+        followup: {
+          ...state.followup,
+          signaleringAntwoorden: { ...state.followup.signaleringAntwoorden, [action.factorId]: action.waarde },
+        },
+        trail: [...state.trail, trailEntry("Follow-up", "followup", tekst, [action.factorId], null)],
+      };
+    }
+
+    // Requirements §10.3: patroon_type (uit PPPD, §18 generiek) hier op
+    // per-factor-niveau — verwachte fluctuatie/afwijkend beloop per
+    // fysio-behandelde factor, los van de andere factoren (nooit
+    // samengevoegd tot één oordeel, zelfde principe als de andere
+    // follow-up-lussen).
+    case "FACTOR_VOORTGANG": {
+      const factor = state.flow?.factoren.find((f) => f.id === action.factorId);
+      const label = action.waarde === "verwachte_fluctuatie" ? "verwachte fluctuatie" : "afwijkend beloop";
+      const tekst = `${factor?.naam ?? action.factorId} — beloop: ${label}.`;
+      return {
+        ...state,
+        followup: {
+          ...state.followup,
+          factorVoortgang: { ...state.followup.factorVoortgang, [action.factorId]: action.waarde },
+        },
+        trail: [
+          ...state.trail,
+          trailEntry("Follow-up", "followup", tekst, action.waarde === "afwijkend_beloop" ? ["RF-013"] : [action.factorId], null),
+        ],
+      };
+    }
+
+    case "AFRONDEN_FACTOREN_FOLLOWUP":
+      return { ...state, stap: "followup-uitkomst" };
 
     case "KIES_INTERVENTIE":
       return { ...state, gekozenInterventieId: action.interventieId, contraIndicatieAntwoorden: {} };
@@ -323,6 +556,63 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
             [action.interventieId],
             null
           ),
+        ],
+      };
+    }
+
+    // Twee-lussen-follow-up (requirements §7.3) — losse acties per lus,
+    // zodat ze onafhankelijk van elkaar kunnen afwijken en als aparte
+    // trail-/StapLog-regels blijven staan (nooit samengevoegd tot één
+    // goed/fout-oordeel).
+    case "FOLLOWUP_FASE_VOORTGANG": {
+      const tekst =
+        action.waarde === "afwijkend"
+          ? "Fase-voortgangslus: geen verwachte fase-voortgang, verslechtering of nieuwe neurologische symptomen — wijkt af van verwacht beloop."
+          : action.waarde === "verwacht"
+            ? "Fase-voortgangslus: verwachte voortgang, patiënt toe aan intensievere training."
+            : "Fase-voortgangslus: nog niet toe aan intensievere training, huidige fase voortzetten.";
+      return {
+        ...state,
+        followup: { ...state.followup, faseVoortgang: action.waarde },
+        trail: [
+          ...state.trail,
+          trailEntry("Follow-up", "followup", tekst, action.waarde === "afwijkend" ? ["RF-008"] : [], null),
+        ],
+      };
+    }
+
+    case "FOLLOWUP_INTERVENTIE_EFFECT": {
+      const tekst =
+        action.waarde === "effectief"
+          ? "Interventie-effectiviteitslus: merkbare verbetering (bijv. DVA-hermeting)."
+          : "Interventie-effectiviteitslus: onvoldoende effect.";
+      return {
+        ...state,
+        followup: { ...state.followup, interventieEffect: action.waarde },
+        trail: [...state.trail, trailEntry("Follow-up", "followup", tekst, [], null)],
+      };
+    }
+
+    // Requirements §8.5 stap 4: trendmatige follow-up (i.p.v. binair of
+    // twee-lussen) — één invoer-actie, net als FOLLOWUP_INTERVENTIE_EFFECT
+    // schrijft dit één trail-entry met de volledige klinische inhoud als
+    // vrije tekst (geen los NPQ-score-schemaveld, zie episodes.ts).
+    case "FOLLOWUP_TREND_INVOER": {
+      const patroonLabel = action.patroonType === "verwachte_fluctuatie" ? "Verwachte fluctuatie" : "Afwijkend beloop";
+      const tekst =
+        `NPQ-score: ${action.npqScore}. Patroon: ${patroonLabel}.` +
+        (action.notitie ? ` Notitie: ${action.notitie}` : "");
+      return {
+        ...state,
+        followup: {
+          ...state.followup,
+          npqScore: action.npqScore,
+          patroonType: action.patroonType,
+          notitie: action.notitie,
+        },
+        trail: [
+          ...state.trail,
+          trailEntry("Follow-up", "followup", tekst, action.patroonType === "afwijkend_beloop" ? ["RF-010", "RF-011"] : [], null),
         ],
       };
     }
